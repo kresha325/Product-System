@@ -11,17 +11,12 @@ function AdminGate() {
     () => sessionStorage.getItem(SESSION_KEY) === 'true',
   )
 
-  const expectedPassword = import.meta.env.VITE_ADMIN_PASSWORD
+  const expectedPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'kresha325.'
 
   function handleSubmit(event) {
     event.preventDefault()
     const normalizedExpectedPassword = expectedPassword?.trim()
     const normalizedPassword = password.trim()
-
-    if (!normalizedExpectedPassword) {
-      setError('Admin password nuk eshte konfiguruar ne .env ose GitHub Secrets.')
-      return
-    }
 
     if (normalizedPassword !== normalizedExpectedPassword) {
       setError('Password gabim.')
