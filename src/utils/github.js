@@ -64,6 +64,15 @@ function encodeContent(content) {
   return btoa(binary)
 }
 
+function toCategorySlug(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/--+/g, '-')
+}
+
 function buildGalleryPageUrl(businessSlug, slug, index) {
   const { owner, repo } = config()
   return `https://${owner}.github.io/${repo}/images/${businessSlug}/${slug}/${index}.webp`
@@ -176,6 +185,9 @@ async function syncBusinessApiArtifacts(products, businesses) {
 
   for (const business of businesses) {
     const filtered = products.filter((product) => getBusinessSlug(product) === business.slug)
+    const categories = Array.from(
+      new Set(filtered.map((product) => String(product.category || '').trim()).filter(Boolean)),
+    )
     const payload = {
       generatedAt: new Date().toISOString(),
       business: {
@@ -184,6 +196,7 @@ async function syncBusinessApiArtifacts(products, businesses) {
         description: business.description ?? '',
         enabledFields: Array.isArray(business.enabledFields) ? business.enabledFields : [],
       },
+      categories,
       products: filtered,
     }
     await putJsonFile(
@@ -196,6 +209,29 @@ async function syncBusinessApiArtifacts(products, businesses) {
       payload,
       `Sync business products ${business.slug}`,
     )
+
+    for (const categoryName of categories) {
+      const categorySlug = toCategorySlug(categoryName)
+      const categoryProducts = filtered.filter(
+        (product) => String(product.category || '').trim() === categoryName,
+      )
+      await putJsonFile(
+        `public/api/${business.slug}/category/${categorySlug}.json`,
+        {
+          generatedAt: new Date().toISOString(),
+          business: {
+            slug: business.slug,
+            name: business.name,
+          },
+          category: {
+            name: categoryName,
+            slug: categorySlug,
+          },
+          products: categoryProducts,
+        },
+        `Sync category API ${business.slug}/${categorySlug}`,
+      )
+    }
   }
 }
 
@@ -449,4 +485,8 @@ export function getBusinessesDataUrl() {
 
 export function getBusinessApiBundleUrl(businessSlug) {
   return getRawRepoUrl(`public/api/${businessSlug}.json`)
+}
+
+export function getBusinessCategoryApiUrl(businessSlug, categorySlug) {
+  return getRawRepoUrl(`public/api/${businessSlug}/category/${categorySlug}.json`)
 }
