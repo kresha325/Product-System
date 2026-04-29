@@ -16,7 +16,9 @@ function ProductDetailPage() {
       setLoading(true)
       setError('')
       try {
-        const response = await fetch(getProductsDataUrl())
+        const url = new URL(getProductsDataUrl())
+        url.searchParams.set('t', Date.now().toString())
+        const response = await fetch(url.toString(), { cache: 'no-store' })
         if (!response.ok) {
           throw new Error('Unable to fetch product data.')
         }

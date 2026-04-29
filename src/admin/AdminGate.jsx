@@ -48,6 +48,7 @@ function AdminGate() {
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
               className="w-full bg-transparent text-sm outline-none"
               placeholder="********"
             />
