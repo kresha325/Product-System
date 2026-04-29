@@ -12,14 +12,17 @@ function AdminGate() {
     () => sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true',
   )
 
-  const expectedPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'kresha325.'
+  const allowedPasswords = [
+    import.meta.env.VITE_ADMIN_PASSWORD || 'kresha325.',
+    import.meta.env.VITE_ADMIN_PASSWORD_2 || 'erblin325.',
+  ]
 
   function handleSubmit(event) {
     event.preventDefault()
-    const normalizedExpectedPassword = expectedPassword?.trim()
     const normalizedPassword = password.trim()
+    const normalizedAllowed = allowedPasswords.map((entry) => entry.trim()).filter(Boolean)
 
-    if (normalizedPassword !== normalizedExpectedPassword) {
+    if (!normalizedAllowed.includes(normalizedPassword)) {
       setError('Password gabim.')
       return
     }
