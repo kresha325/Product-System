@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-29T17:44:51.046Z",
+  "generatedAt": "2026-04-29T20:03:17.661Z",
   "businesses": [
     {
       "slug": "default",
@@ -20,6 +20,13 @@
         "sku"
       ],
       "productCount": 1
+    },
+    {
+      "slug": "napoletananostra",
+      "name": "NapoletanaNostra",
+      "description": "",
+      "enabledFields": [],
+      "productCount": 0
     }
   ]
 }
