@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-29T17:43:41.160Z",
+  "generatedAt": "2026-04-29T17:44:51.046Z",
   "businesses": [
     {
       "slug": "default",
@@ -19,7 +19,7 @@
         "tags",
         "sku"
       ],
-      "productCount": 0
+      "productCount": 1
     }
   ]
 }
