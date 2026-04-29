@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-29T17:44:54.344Z",
+  "generatedAt": "2026-04-29T20:03:21.672Z",
   "business": {
     "slug": "napoletana-nostra",
     "name": "Napoletana Nostra",
@@ -12,6 +12,9 @@
       "sku"
     ]
   },
+  "categories": [
+    "Pije"
+  ],
   "products": [
     {
       "name": "Coca Cola",
