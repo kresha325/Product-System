@@ -39,6 +39,7 @@ function AdminPage() {
   const [businesses, setBusinesses] = useState([])
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [deletingSlug, setDeletingSlug] = useState('')
+  const [isDraggingImages, setIsDraggingImages] = useState(false)
   const currentAdmin = useMemo(() => getCurrentAdmin(), [])
 
   const derivedSlug = useMemo(() => toSlug(form.name), [form.name])
@@ -242,8 +243,7 @@ function AdminPage() {
     return next
   }
 
-  function addFiles(event) {
-    const files = Array.from(event.target.files || [])
+  function appendFiles(files) {
     if (!files.length) {
       return
     }
@@ -256,7 +256,39 @@ function AdminPage() {
         preview: URL.createObjectURL(file),
       })),
     ])
+  }
+
+  function addFiles(event) {
+    const files = Array.from(event.target.files || [])
+    appendFiles(files)
     event.target.value = ''
+  }
+
+  function onDragOverImages(event) {
+    event.preventDefault()
+    setIsDraggingImages(true)
+  }
+
+  function onDragEnterImages(event) {
+    event.preventDefault()
+    setIsDraggingImages(true)
+  }
+
+  function onDragLeaveImages(event) {
+    event.preventDefault()
+    if (event.currentTarget.contains(event.relatedTarget)) {
+      return
+    }
+    setIsDraggingImages(false)
+  }
+
+  function onDropImages(event) {
+    event.preventDefault()
+    setIsDraggingImages(false)
+    const files = Array.from(event.dataTransfer?.files || []).filter((file) =>
+      file.type.startsWith('image/'),
+    )
+    appendFiles(files)
   }
 
   function removeGalleryItem(id) {
@@ -491,15 +523,28 @@ function AdminPage() {
             <label className="text-sm font-medium text-slate-700" htmlFor="imageFiles">
               Product Images
             </label>
-            <input
-              id="imageFiles"
-              name="imageFiles"
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={addFiles}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-slate-700"
-            />
+            <div
+              onDragOver={onDragOverImages}
+              onDragEnter={onDragEnterImages}
+              onDragLeave={onDragLeaveImages}
+              onDrop={onDropImages}
+              className={`rounded-lg border-2 border-dashed p-3 transition ${
+                isDraggingImages ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-white'
+              }`}
+            >
+              <input
+                id="imageFiles"
+                name="imageFiles"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={addFiles}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-slate-700"
+              />
+              <p className="mt-2 text-xs text-slate-500">
+                Drag & drop images here, or click to select multiple files.
+              </p>
+            </div>
             {galleryItems.length > 0 && (
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {galleryItems.map((item) => (
