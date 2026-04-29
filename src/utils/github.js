@@ -115,7 +115,7 @@ export function getProductsDataUrl() {
   const owner = import.meta.env.VITE_GITHUB_OWNER
   const repo = import.meta.env.VITE_GITHUB_REPO
   if (!owner || !repo) {
-    return '/data/products.json'
+    return `${import.meta.env.BASE_URL}data/products.json`
   }
   return `https://raw.githubusercontent.com/${owner}/${repo}/${DEFAULT_BRANCH}/data/products.json`
 }

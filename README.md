@@ -41,3 +41,10 @@ npm run dev
 ```bash
 npm run build
 ```
+
+## Deploy to GitHub Pages
+
+- GitHub Actions workflow is included at `.github/workflows/deploy-pages.yml`.
+- In repository settings, open `Settings -> Pages`.
+- Under Source, select `GitHub Actions`.
+- Every push to `main` deploys automatically to Pages.

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const FALLBACK_IMAGE = '/images/fallback.svg'
+const FALLBACK_IMAGE = `${import.meta.env.BASE_URL}images/fallback.svg`
 
 function ImageWithFallback({ src, alt, className = 'h-full w-full object-cover', loading = 'lazy' }) {
   const [imageSrc, setImageSrc] = useState(src || FALLBACK_IMAGE)
