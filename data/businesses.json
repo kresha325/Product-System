@@ -4,5 +4,17 @@
     "name": "Default business",
     "description": "",
     "enabledFields": []
+  },
+  {
+    "slug": "napoletana-nostra",
+    "name": "Napoletana Nostra",
+    "description": "",
+    "enabledFields": [
+      "price",
+      "brand",
+      "currency",
+      "tags",
+      "sku"
+    ]
   }
 ]
