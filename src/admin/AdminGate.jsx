@@ -11,8 +11,10 @@ function AdminGate() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(() => !!getCurrentAdmin())
+  const superAdminUsername = (import.meta.env.VITE_SUPERADMIN_USERNAME || '').trim()
+  const superAdminPassword = (import.meta.env.VITE_SUPERADMIN_PASSWORD || '').trim()
 
-  const credentials = (import.meta.env.VITE_ADMIN_CREDENTIALS || 'binisoft:kresha325.,erblin:erblin325.')
+  const credentials = (import.meta.env.VITE_ADMIN_CREDENTIALS || 'erblin:erblin325.,enes:enes325.')
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean)
@@ -29,6 +31,22 @@ function AdminGate() {
     event.preventDefault()
     const normalizedUsername = username.trim().toLowerCase()
     const normalizedPassword = password.trim()
+    const isSuperAdminMatch =
+      !!superAdminUsername &&
+      !!superAdminPassword &&
+      superAdminUsername.toLowerCase() === normalizedUsername &&
+      superAdminPassword === normalizedPassword
+
+    if (isSuperAdminMatch) {
+      setCurrentAdmin({
+        username: superAdminUsername,
+        role: 'super_admin',
+      })
+      setIsUnlocked(true)
+      setError('')
+      return
+    }
+
     const matched = credentials.find(
       (entry) =>
         entry.username.toLowerCase() === normalizedUsername &&
@@ -42,7 +60,7 @@ function AdminGate() {
 
     setCurrentAdmin({
       username: matched.username,
-      role: matched.username.toLowerCase() === 'binisoft' ? 'super_admin' : 'admin',
+      role: 'admin',
     })
     setIsUnlocked(true)
     setError('')
