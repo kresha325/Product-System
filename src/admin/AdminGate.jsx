@@ -2,15 +2,14 @@ import { useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import AdminPage from './AdminPage'
 import BusinessAdminPage from './BusinessAdminPage'
-
-const SESSION_KEY = 'product-system-admin-auth'
+import { ADMIN_SESSION_KEY } from '../utils/adminSession'
 
 function AdminGate() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(
-    () => sessionStorage.getItem(SESSION_KEY) === 'true',
+    () => sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true',
   )
 
   const expectedPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'kresha325.'
@@ -25,7 +24,7 @@ function AdminGate() {
       return
     }
 
-    sessionStorage.setItem(SESSION_KEY, 'true')
+    sessionStorage.setItem(ADMIN_SESSION_KEY, 'true')
     setIsUnlocked(true)
     setError('')
   }

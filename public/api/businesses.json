@@ -1,0 +1,11 @@
+{
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "businesses": [
+    {
+      "slug": "default",
+      "name": "Default business",
+      "description": "",
+      "productCount": 0
+    }
+  ]
+}

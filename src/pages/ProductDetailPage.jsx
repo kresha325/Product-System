@@ -4,6 +4,7 @@ import ImageWithFallback from '../components/ImageWithFallback'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import { getProductsDataUrl } from '../utils/github'
+import { isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug, getProductImages } from '../utils/product'
 
 function ProductDetailPage() {
@@ -46,11 +47,23 @@ function ProductDetailPage() {
     return <Notification type="error" message={error} />
   }
 
+  const showAdminEdit = isAdminSession()
+
   return (
     <article className="space-y-5">
-      <Link to="/products" className="text-sm font-medium text-blue-600 hover:text-blue-700">
-        Back to products
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link to="/products" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+          Back to products
+        </Link>
+        {showAdminEdit ? (
+          <Link
+            to={`/admin/edit/${product.slug}`}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            Edit product
+          </Link>
+        ) : null}
+      </div>
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="grid gap-2 sm:grid-cols-2">
           {getProductImages(product).map((src, index) => (
