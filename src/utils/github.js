@@ -231,10 +231,19 @@ export async function listBusinessesFromRepo() {
       ? businesses.map((business) => ({
           ...business,
           enabledFields: Array.isArray(business.enabledFields) ? business.enabledFields : [],
+          createdBy: business.createdBy || (business.slug === 'default' ? 'system' : ''),
         }))
       : []
   } catch {
-    return [{ slug: 'default', name: 'Default business', description: '', enabledFields: [] }]
+    return [
+      {
+        slug: 'default',
+        name: 'Default business',
+        description: '',
+        enabledFields: [],
+        createdBy: 'system',
+      },
+    ]
   }
 }
 
@@ -255,25 +264,40 @@ async function writeBusinessesAndSync(businesses, message) {
   await syncBusinessApiArtifacts(products, businesses)
 }
 
-export async function saveBusiness({ slug, name, description, enabledFields = [] }) {
+function canManageBusiness(business, actor) {
+  if (!actor) {
+    return false
+  }
+  if (actor.role === 'super_admin') {
+    return true
+  }
+  return business.createdBy === actor.username
+}
+
+export async function saveBusiness({ slug, name, description, enabledFields = [] }, actor) {
   const businesses = await listBusinessesFromRepo()
   if (businesses.some((business) => business.slug === slug)) {
     throw new Error('A business with this slug already exists.')
   }
+  const createdBy = actor?.username || 'system'
   businesses.push({
     slug,
     name,
     description: description ?? '',
     enabledFields: Array.isArray(enabledFields) ? enabledFields : [],
+    createdBy,
   })
   await writeBusinessesAndSync(businesses, `Add business ${slug}`)
 }
 
-export async function updateBusiness(slug, updates) {
+export async function updateBusiness(slug, updates, actor) {
   const businesses = await listBusinessesFromRepo()
   const idx = businesses.findIndex((business) => business.slug === slug)
   if (idx === -1) {
     throw new Error('Business not found.')
+  }
+  if (!canManageBusiness(businesses[idx], actor)) {
+    throw new Error('You are not allowed to update this business.')
   }
 
   businesses[idx] = {
@@ -303,15 +327,23 @@ export async function updateBusiness(slug, updates) {
   await writeBusinessesAndSync(businesses, `Update business ${slug}`)
 }
 
-export async function deleteBusiness(slug) {
+export async function deleteBusiness(slug, actor) {
   if (slug === 'default') {
     throw new Error('Cannot delete the default business.')
+  }
+  const allBusinesses = await listBusinessesFromRepo()
+  const target = allBusinesses.find((business) => business.slug === slug)
+  if (!target) {
+    throw new Error('Business not found.')
+  }
+  if (!canManageBusiness(target, actor)) {
+    throw new Error('You are not allowed to delete this business.')
   }
   const products = await listProductsFromRepo()
   if (products.some((product) => getBusinessSlug(product) === slug)) {
     throw new Error('Cannot delete a business that still has products.')
   }
-  const businesses = (await listBusinessesFromRepo()).filter((business) => business.slug !== slug)
+  const businesses = allBusinesses.filter((business) => business.slug !== slug)
   await writeBusinessesAndSync(businesses, `Delete business ${slug}`)
   try {
     await deleteRepoFile({

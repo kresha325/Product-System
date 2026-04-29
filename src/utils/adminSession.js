@@ -1,9 +1,32 @@
 /** Matches AdminGate sessionStorage key — used for optional Edit links on cards when logged in as admin. */
 export const ADMIN_SESSION_KEY = 'product-system-admin-auth'
+export const ADMIN_PROFILE_KEY = 'product-system-admin-profile'
+
+export function setCurrentAdmin(admin) {
+  sessionStorage.setItem(ADMIN_SESSION_KEY, 'true')
+  sessionStorage.setItem(ADMIN_PROFILE_KEY, JSON.stringify(admin))
+}
+
+export function clearCurrentAdmin() {
+  sessionStorage.removeItem(ADMIN_SESSION_KEY)
+  sessionStorage.removeItem(ADMIN_PROFILE_KEY)
+}
+
+export function getCurrentAdmin() {
+  try {
+    const raw = sessionStorage.getItem(ADMIN_PROFILE_KEY)
+    if (!raw) {
+      return null
+    }
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
 
 export function isAdminSession() {
   try {
-    return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true'
+    return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true' && !!getCurrentAdmin()
   } catch {
     return false
   }

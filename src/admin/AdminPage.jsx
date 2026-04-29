@@ -10,6 +10,7 @@ import {
   updateProductWithImages,
 } from '../utils/github'
 import { fetchUrlAsWebpBase64, fileToWebpBase64 } from '../utils/image'
+import { getCurrentAdmin } from '../utils/adminSession'
 import { DEFAULT_BUSINESS_SLUG, getBusinessSlug, getProductImages } from '../utils/product'
 import { PRODUCT_OPTIONAL_FIELD_MAP } from '../utils/productFields'
 import { toSlug } from '../utils/slug'
@@ -38,6 +39,7 @@ function AdminPage() {
   const [businesses, setBusinesses] = useState([])
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [deletingSlug, setDeletingSlug] = useState('')
+  const currentAdmin = useMemo(() => getCurrentAdmin(), [])
 
   const derivedSlug = useMemo(() => toSlug(form.name), [form.name])
   const activeSlug = editSlugParam ?? derivedSlug
@@ -54,7 +56,18 @@ function AdminPage() {
     setIsLoadingProducts(true)
     try {
       const items = await fetchProducts()
-      setProducts(items)
+      if (!currentAdmin || currentAdmin.role === 'super_admin') {
+        setProducts(items)
+      } else {
+        setProducts(
+          items.filter((product) =>
+            businesses.some(
+              (business) =>
+                business.slug === getBusinessSlug(product) && business.createdBy === currentAdmin.username,
+            ),
+          ),
+        )
+      }
     } finally {
       setIsLoadingProducts(false)
     }
@@ -67,7 +80,19 @@ function AdminPage() {
       try {
         const items = await fetchProducts()
         if (mounted) {
-          setProducts(items)
+          if (!currentAdmin || currentAdmin.role === 'super_admin') {
+            setProducts(items)
+          } else {
+            setProducts(
+              items.filter((product) =>
+                businesses.some(
+                  (business) =>
+                    business.slug === getBusinessSlug(product) &&
+                    business.createdBy === currentAdmin.username,
+                ),
+              ),
+            )
+          }
         }
       } catch (err) {
         if (mounted) {
@@ -88,7 +113,7 @@ function AdminPage() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [businesses, currentAdmin])
 
   useEffect(() => {
     let cancelled = false
@@ -97,7 +122,11 @@ function AdminPage() {
       try {
         const list = await listBusinessesFromRepo()
         if (!cancelled) {
-          setBusinesses(list)
+          if (!currentAdmin || currentAdmin.role === 'super_admin') {
+            setBusinesses(list)
+          } else {
+            setBusinesses(list.filter((business) => business.createdBy === currentAdmin.username))
+          }
         }
       } catch {
         if (!cancelled) {
@@ -111,7 +140,7 @@ function AdminPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [currentAdmin])
 
   useEffect(() => {
     if (!editSlugParam) {
@@ -258,6 +287,10 @@ function AdminPage() {
 
     if (!form.name || !form.category || !form.description) {
       setStatus({ type: 'error', message: 'Please complete all fields before submitting.' })
+      return
+    }
+    if (!form.businessSlug || !businesses.some((business) => business.slug === form.businessSlug)) {
+      setStatus({ type: 'error', message: 'Please select one of your businesses first.' })
       return
     }
 

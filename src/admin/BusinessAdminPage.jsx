@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import { deleteBusiness, listBusinessesFromRepo, saveBusiness, updateBusiness } from '../utils/github'
+import { getCurrentAdmin } from '../utils/adminSession'
 import { PRODUCT_OPTIONAL_FIELDS } from '../utils/productFields'
 import { toSlug } from '../utils/slug'
 
@@ -22,6 +23,17 @@ function BusinessAdminPage() {
   const [editingSlug, setEditingSlug] = useState('')
 
   const previewSlug = useMemo(() => toSlug(form.name), [form.name])
+  const currentAdmin = useMemo(() => getCurrentAdmin(), [])
+
+  const filterBusinessesByAdmin = useCallback((list) => {
+    if (!currentAdmin) {
+      return []
+    }
+    if (currentAdmin.role === 'super_admin') {
+      return list
+    }
+    return list.filter((business) => business.createdBy === currentAdmin.username)
+  }, [currentAdmin])
 
   useEffect(() => {
     let cancelled = false
@@ -30,7 +42,7 @@ function BusinessAdminPage() {
       try {
         const list = await listBusinessesFromRepo()
         if (!cancelled) {
-          setBusinesses(list)
+          setBusinesses(filterBusinessesByAdmin(list))
         }
       } catch (err) {
         if (!cancelled) {
@@ -48,7 +60,7 @@ function BusinessAdminPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [filterBusinessesByAdmin])
 
   function updateField(event) {
     const { name, value } = event.target
@@ -69,12 +81,16 @@ function BusinessAdminPage() {
 
   async function refreshBusinesses() {
     const list = await listBusinessesFromRepo()
-    setBusinesses(list)
+    setBusinesses(filterBusinessesByAdmin(list))
   }
 
   async function onSubmit(event) {
     event.preventDefault()
     setStatus({ type: 'info', message: '' })
+    if (!currentAdmin) {
+      setStatus({ type: 'error', message: 'Admin session missing. Please login again.' })
+      return
+    }
     if (!form.name.trim() || (!previewSlug && !editingSlug)) {
       setStatus({ type: 'error', message: 'Please enter a valid business name.' })
       return
@@ -82,18 +98,25 @@ function BusinessAdminPage() {
     setSubmitting(true)
     try {
       if (editingSlug) {
-        await updateBusiness(editingSlug, {
-          name: form.name,
-          description: form.description,
-          enabledFields: form.enabledFields,
-        })
+        await updateBusiness(
+          editingSlug,
+          {
+            name: form.name,
+            description: form.description,
+            enabledFields: form.enabledFields,
+          },
+          currentAdmin,
+        )
       } else {
-        await saveBusiness({
-          slug: previewSlug,
-          name: form.name.trim(),
-          description: form.description.trim(),
-          enabledFields: form.enabledFields,
-        })
+        await saveBusiness(
+          {
+            slug: previewSlug,
+            name: form.name.trim(),
+            description: form.description.trim(),
+            enabledFields: form.enabledFields,
+          },
+          currentAdmin,
+        )
       }
       setForm(INITIAL)
       setEditingSlug('')
@@ -107,10 +130,14 @@ function BusinessAdminPage() {
   }
 
   async function onDelete(slug) {
+    if (!currentAdmin) {
+      setStatus({ type: 'error', message: 'Admin session missing. Please login again.' })
+      return
+    }
     setDeleting(slug)
     setStatus({ type: 'info', message: '' })
     try {
-      await deleteBusiness(slug)
+      await deleteBusiness(slug, currentAdmin)
       setStatus({ type: 'success', message: 'Business deleted.' })
       await refreshBusinesses()
     } catch (err) {
@@ -248,6 +275,7 @@ function BusinessAdminPage() {
                 <div>
                   <p className="font-medium text-slate-900">{b.name}</p>
                   <p className="text-xs text-slate-500 font-mono">{b.slug}</p>
+                  <p className="text-xs text-slate-400">Owner: {b.createdBy || 'system'}</p>
                   <p className="text-xs text-slate-500">
                     Fields: {Array.isArray(b.enabledFields) && b.enabledFields.length > 0 ? b.enabledFields.join(', ') : 'none'}
                   </p>

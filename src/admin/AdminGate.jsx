@@ -2,43 +2,82 @@ import { useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import AdminPage from './AdminPage'
 import BusinessAdminPage from './BusinessAdminPage'
-import { ADMIN_SESSION_KEY } from '../utils/adminSession'
+import { clearCurrentAdmin, getCurrentAdmin, setCurrentAdmin } from '../utils/adminSession'
 
 function AdminGate() {
+  const currentAdmin = getCurrentAdmin()
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
-  const [isUnlocked, setIsUnlocked] = useState(
-    () => sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true',
-  )
+  const [isUnlocked, setIsUnlocked] = useState(() => !!getCurrentAdmin())
 
-  const allowedPasswords = [
-    import.meta.env.VITE_ADMIN_PASSWORD || 'kresha325.',
-    import.meta.env.VITE_ADMIN_PASSWORD_2 || 'erblin325.',
-  ]
+  const credentials = (import.meta.env.VITE_ADMIN_CREDENTIALS || 'binisoft:kresha325.,erblin:erblin325.')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [name, pass] = entry.split(':')
+      return {
+        username: (name || '').trim(),
+        password: (pass || '').trim(),
+      }
+    })
+    .filter((entry) => entry.username && entry.password)
 
   function handleSubmit(event) {
     event.preventDefault()
+    const normalizedUsername = username.trim().toLowerCase()
     const normalizedPassword = password.trim()
-    const normalizedAllowed = allowedPasswords.map((entry) => entry.trim()).filter(Boolean)
+    const matched = credentials.find(
+      (entry) =>
+        entry.username.toLowerCase() === normalizedUsername &&
+        entry.password === normalizedPassword,
+    )
 
-    if (!normalizedAllowed.includes(normalizedPassword)) {
+    if (!matched) {
       setError('Password gabim.')
       return
     }
 
-    sessionStorage.setItem(ADMIN_SESSION_KEY, 'true')
+    setCurrentAdmin({
+      username: matched.username,
+      role: matched.username.toLowerCase() === 'binisoft' ? 'super_admin' : 'admin',
+    })
     setIsUnlocked(true)
     setError('')
   }
 
+  function handleLogout() {
+    clearCurrentAdmin()
+    setUsername('')
+    setPassword('')
+    setShowPassword(false)
+    setError('')
+    setIsUnlocked(false)
+  }
+
   if (isUnlocked) {
     return (
-      <Routes>
-        <Route index element={<AdminPage />} />
-        <Route path="businesses" element={<BusinessAdminPage />} />
-        <Route path="edit/:slug" element={<AdminPage />} />
-      </Routes>
+      <div className="space-y-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <p className="text-sm text-slate-600">
+            Signed in as <span className="font-semibold text-slate-900">{currentAdmin?.username}</span>
+          </p>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Logout
+          </button>
+        </div>
+        <Routes>
+          <Route index element={<AdminPage />} />
+          <Route path="businesses" element={<BusinessAdminPage />} />
+          <Route path="edit/:slug" element={<AdminPage />} />
+        </Routes>
+      </div>
     )
   }
 
@@ -48,6 +87,20 @@ function AdminGate() {
       <p className="mt-2 text-sm text-slate-600">Vendos password-in per te hyre te paneli i adminit.</p>
 
       <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
+        <div className="space-y-2">
+          <label htmlFor="admin-username" className="text-sm font-medium text-slate-700">
+            Username
+          </label>
+          <input
+            id="admin-username"
+            type="text"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            autoComplete="username"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+            placeholder="binisoft"
+          />
+        </div>
         <div className="space-y-2">
           <label htmlFor="admin-password" className="text-sm font-medium text-slate-700">
             Password
