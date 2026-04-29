@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import ImageWithFallback from './ImageWithFallback'
-import { getProductImages } from '../utils/product'
+import { getBusinessSlug, getProductImages } from '../utils/product'
 
 function ProductCard({ product }) {
   const cover = getProductImages(product)[0]
@@ -12,6 +12,9 @@ function ProductCard({ product }) {
           <ImageWithFallback src={cover} alt={product.name} />
         </div>
         <div className="space-y-2 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            {product.businessName || getBusinessSlug(product)}
+          </p>
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">{product.category}</p>
           <h3 className="text-lg font-semibold text-slate-900">{product.name}</h3>
           <p className="text-sm text-slate-600">{product.description}</p>

@@ -1,3 +1,5 @@
+import { getBusinessSlug } from './product.js'
+
 const API_BASE = 'https://api.github.com'
 const DEFAULT_BRANCH = 'main'
 const DEFAULT_OWNER = 'kresha325'
@@ -141,23 +143,136 @@ export async function putRepoFile({ path, content, message, sha, contentBase64 =
   })
 }
 
-export async function appendProduct(product) {
-  const filePath = 'data/products.json'
-  const file = await getRepoFile(filePath)
-  const products = JSON.parse(file.content)
-  products.push(product)
+async function putJsonFile(path, data, message) {
+  const content = JSON.stringify(data, null, 2)
+  let sha
+  try {
+    const file = await getRepoFile(path)
+    sha = file.sha
+  } catch {
+    sha = undefined
+  }
   await putRepoFile({
-    path: filePath,
+    path,
+    content,
+    message,
+    sha,
+  })
+}
+
+async function syncBusinessApiArtifacts(products, businesses) {
+  const bundlePayload = {
+    generatedAt: new Date().toISOString(),
+    businesses: businesses.map((business) => ({
+      slug: business.slug,
+      name: business.name,
+      description: business.description ?? '',
+      productCount: products.filter((product) => getBusinessSlug(product) === business.slug).length,
+    })),
+  }
+
+  await putJsonFile('public/api/businesses.json', bundlePayload, 'Sync businesses API index')
+
+  for (const business of businesses) {
+    const filtered = products.filter((product) => getBusinessSlug(product) === business.slug)
+    await putJsonFile(
+      `public/api/${business.slug}.json`,
+      {
+        generatedAt: new Date().toISOString(),
+        business: {
+          slug: business.slug,
+          name: business.name,
+          description: business.description ?? '',
+        },
+        products: filtered,
+      },
+      `Sync API bundle ${business.slug}`,
+    )
+  }
+}
+
+async function writeProductsAndSync(products, message) {
+  const file = await getRepoFile('data/products.json')
+  await putRepoFile({
+    path: 'data/products.json',
     content: JSON.stringify(products, null, 2),
-    message: `Add product: ${product.name}`,
+    message,
     sha: file.sha,
   })
+  const businesses = await listBusinessesFromRepo()
+  await syncBusinessApiArtifacts(products, businesses)
+}
+
+export async function appendProduct(product) {
+  const products = await listProductsFromRepo()
+  products.push(product)
+  await writeProductsAndSync(products, `Add product: ${product.name}`)
 }
 
 export async function listProductsFromRepo() {
   const file = await getRepoFile('data/products.json')
   const products = JSON.parse(file.content)
   return Array.isArray(products) ? products : []
+}
+
+export async function listBusinessesFromRepo() {
+  try {
+    const file = await getRepoFile('data/businesses.json')
+    const businesses = JSON.parse(file.content)
+    return Array.isArray(businesses) ? businesses : []
+  } catch {
+    return [{ slug: 'default', name: 'Default business', description: '' }]
+  }
+}
+
+async function writeBusinessesAndSync(businesses, message) {
+  let sha
+  try {
+    sha = (await getRepoFile('data/businesses.json')).sha
+  } catch {
+    sha = undefined
+  }
+  await putRepoFile({
+    path: 'data/businesses.json',
+    content: JSON.stringify(businesses, null, 2),
+    message,
+    sha,
+  })
+  const products = await listProductsFromRepo()
+  await syncBusinessApiArtifacts(products, businesses)
+}
+
+export async function saveBusiness({ slug, name, description }) {
+  const businesses = await listBusinessesFromRepo()
+  if (businesses.some((business) => business.slug === slug)) {
+    throw new Error('A business with this slug already exists.')
+  }
+  businesses.push({
+    slug,
+    name,
+    description: description ?? '',
+  })
+  await writeBusinessesAndSync(businesses, `Add business ${slug}`)
+}
+
+export async function deleteBusiness(slug) {
+  if (slug === 'default') {
+    throw new Error('Cannot delete the default business.')
+  }
+  const products = await listProductsFromRepo()
+  if (products.some((product) => getBusinessSlug(product) === slug)) {
+    throw new Error('Cannot delete a business that still has products.')
+  }
+  const businesses = (await listBusinessesFromRepo()).filter((business) => business.slug !== slug)
+  await writeBusinessesAndSync(businesses, `Delete business ${slug}`)
+  try {
+    await deleteRepoFile({
+      path: `public/api/${slug}.json`,
+      message: `Remove API bundle for ${slug}`,
+    })
+  } catch {
+    // Missing file is fine.
+  }
 }
 
 export async function deleteRepoFile({ path, message }) {
@@ -173,21 +288,14 @@ export async function deleteRepoFile({ path, message }) {
 }
 
 export async function deleteProductBySlug(slug) {
-  const filePath = 'data/products.json'
-  const file = await getRepoFile(filePath)
-  const products = JSON.parse(file.content)
+  const products = await listProductsFromRepo()
   const filtered = products.filter((product) => product.slug !== slug)
 
   if (filtered.length === products.length) {
     throw new Error('Product not found for deletion.')
   }
 
-  await putRepoFile({
-    path: filePath,
-    content: JSON.stringify(filtered, null, 2),
-    message: `Delete product: ${slug}`,
-    sha: file.sha,
-  })
+  await writeProductsAndSync(filtered, `Delete product: ${slug}`)
 
   await deleteGalleryFolderContents(slug)
   await deleteLegacySingleImage(slug)
@@ -199,6 +307,8 @@ export async function saveProductWithImages(productInput, base64Images) {
   await appendProduct({
     name: productInput.name,
     slug,
+    businessSlug: productInput.businessSlug,
+    businessName: productInput.businessName,
     category: productInput.category,
     description: productInput.description,
     images: urls,
@@ -207,9 +317,7 @@ export async function saveProductWithImages(productInput, base64Images) {
 
 export async function updateProductWithImages(slug, fields, base64Images) {
   const urls = await replaceProductGallery(slug, base64Images)
-  const filePath = 'data/products.json'
-  const file = await getRepoFile(filePath)
-  const products = JSON.parse(file.content)
+  const products = await listProductsFromRepo()
   const idx = products.findIndex((product) => product.slug === slug)
 
   if (idx === -1) {
@@ -224,16 +332,23 @@ export async function updateProductWithImages(slug, fields, base64Images) {
   }
   delete products[idx].image
 
-  await putRepoFile({
-    path: filePath,
-    content: JSON.stringify(products, null, 2),
-    message: `Update product: ${slug}`,
-    sha: file.sha,
-  })
+  await writeProductsAndSync(products, `Update product: ${slug}`)
+}
+
+export function getRawRepoUrl(filePath) {
+  const owner = import.meta.env.VITE_GITHUB_OWNER || DEFAULT_OWNER
+  const repo = import.meta.env.VITE_GITHUB_REPO || DEFAULT_REPO
+  return `https://raw.githubusercontent.com/${owner}/${repo}/${DEFAULT_BRANCH}/${filePath}`
 }
 
 export function getProductsDataUrl() {
-  const owner = import.meta.env.VITE_GITHUB_OWNER || DEFAULT_OWNER
-  const repo = import.meta.env.VITE_GITHUB_REPO || DEFAULT_REPO
-  return `https://raw.githubusercontent.com/${owner}/${repo}/${DEFAULT_BRANCH}/data/products.json`
+  return getRawRepoUrl('data/products.json')
+}
+
+export function getBusinessesDataUrl() {
+  return getRawRepoUrl('data/businesses.json')
+}
+
+export function getBusinessApiBundleUrl(businessSlug) {
+  return getRawRepoUrl(`public/api/${businessSlug}.json`)
 }

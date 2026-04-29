@@ -4,18 +4,20 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import {
   deleteProductBySlug,
+  listBusinessesFromRepo,
   listProductsFromRepo,
   saveProductWithImages,
   updateProductWithImages,
 } from '../utils/github'
 import { fetchUrlAsWebpBase64, fileToWebpBase64 } from '../utils/image'
-import { getProductImages } from '../utils/product'
+import { DEFAULT_BUSINESS_SLUG, getBusinessSlug, getProductImages } from '../utils/product'
 import { toSlug } from '../utils/slug'
 
 const INITIAL_FORM = {
   name: '',
   category: '',
   description: '',
+  businessSlug: DEFAULT_BUSINESS_SLUG,
 }
 
 function makeId() {
@@ -31,6 +33,7 @@ function AdminPage() {
   const [status, setStatus] = useState({ type: 'info', message: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [products, setProducts] = useState([])
+  const [businesses, setBusinesses] = useState([])
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [deletingSlug, setDeletingSlug] = useState('')
 
@@ -82,6 +85,29 @@ function AdminPage() {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
+
+    async function loadBiz() {
+      try {
+        const list = await listBusinessesFromRepo()
+        if (!cancelled) {
+          setBusinesses(list)
+        }
+      } catch {
+        if (!cancelled) {
+          setBusinesses([])
+        }
+      }
+    }
+
+    loadBiz()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (!editSlugParam) {
       return
     }
@@ -103,6 +129,7 @@ function AdminPage() {
           name: found.name,
           category: found.category,
           description: found.description,
+          businessSlug: getBusinessSlug(found),
         })
         const imgs = getProductImages(found)
         setGalleryItems(
@@ -200,6 +227,9 @@ function AdminPage() {
     setIsSubmitting(true)
     try {
       const base64Images = await buildBase64Gallery()
+      const bizLabel =
+        businesses.find((business) => business.slug === form.businessSlug)?.name ?? form.businessSlug
+
       if (editSlugParam) {
         await updateProductWithImages(
           editSlugParam,
@@ -207,6 +237,8 @@ function AdminPage() {
             name: form.name.trim(),
             category: form.category.trim(),
             description: form.description.trim(),
+            businessSlug: form.businessSlug,
+            businessName: bizLabel,
           },
           base64Images,
         )
@@ -217,11 +249,13 @@ function AdminPage() {
             slug: activeSlug,
             category: form.category.trim(),
             description: form.description.trim(),
+            businessSlug: form.businessSlug,
+            businessName: bizLabel,
           },
           base64Images,
         )
       }
-      setForm(INITIAL_FORM)
+      setForm({ ...INITIAL_FORM, businessSlug: form.businessSlug })
       galleryItems.forEach((item) => {
         if (item.kind === 'pending' && item.preview) {
           URL.revokeObjectURL(item.preview)
@@ -273,16 +307,24 @@ function AdminPage() {
           <p className="mt-1 text-slate-600">
             Add products directly to your GitHub repository with no database.
           </p>
-        </div>
-        {editSlugParam ? (
-          <button
-            type="button"
-            onClick={() => navigate('/admin')}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          <Link
+            to="/admin/businesses"
+            className="mt-2 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
           >
-            Cancel edit
-          </button>
-        ) : null}
+            Manage businesses →
+          </Link>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {editSlugParam ? (
+            <button
+              type="button"
+              onClick={() => navigate('/admin')}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Cancel edit
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -331,6 +373,27 @@ function AdminPage() {
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
               placeholder="Describe your product..."
             />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700" htmlFor="businessSlug">
+              Business
+            </label>
+            <select
+              id="businessSlug"
+              name="businessSlug"
+              value={form.businessSlug}
+              onChange={updateField}
+              disabled={businesses.length === 0}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none disabled:bg-slate-100"
+            >
+              {businesses.map((business) => (
+                <option key={business.slug} value={business.slug}>
+                  {business.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500">Products are grouped per business for catalog and JSON APIs.</p>
           </div>
 
           <div className="space-y-2">
@@ -406,7 +469,11 @@ function AdminPage() {
               >
                 <div>
                   <p className="font-medium text-slate-900">{product.name}</p>
-                  <p className="text-xs text-slate-500">{product.slug}</p>
+                  <p className="text-xs text-slate-500">
+                    {product.slug}
+                    <span className="text-slate-400"> · </span>
+                    <span className="font-mono">{getBusinessSlug(product)}</span>
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   <Link

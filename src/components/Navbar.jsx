@@ -16,6 +16,9 @@ function Navbar() {
           Product System
         </NavLink>
         <nav className="flex items-center gap-2">
+          <NavLink to="/businesses" className={linkClass}>
+            Businesses
+          </NavLink>
           <NavLink to="/products" className={linkClass}>
             Products
           </NavLink>

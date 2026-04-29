@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import AdminPage from './AdminPage'
+import BusinessAdminPage from './BusinessAdminPage'
 
 const SESSION_KEY = 'product-system-admin-auth'
 
@@ -33,6 +34,7 @@ function AdminGate() {
     return (
       <Routes>
         <Route index element={<AdminPage />} />
+        <Route path="businesses" element={<BusinessAdminPage />} />
         <Route path="edit/:slug" element={<AdminPage />} />
       </Routes>
     )

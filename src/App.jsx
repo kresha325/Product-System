@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AdminGate from './admin/AdminGate'
 import Navbar from './components/Navbar'
+import BusinessesPage from './pages/BusinessesPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ProductDetailPage from './pages/ProductDetailPage'
 import ProductsPage from './pages/ProductsPage'
@@ -14,6 +15,8 @@ function App() {
           <Route path="/" element={<Navigate replace to="/products" />} />
           <Route path="/admin/*" element={<AdminGate />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/business/:businessSlug" element={<ProductsPage />} />
+          <Route path="/businesses" element={<BusinessesPage />} />
           <Route path="/product/:slug" element={<ProductDetailPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

@@ -4,7 +4,7 @@ import ImageWithFallback from '../components/ImageWithFallback'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import { getProductsDataUrl } from '../utils/github'
-import { getProductImages } from '../utils/product'
+import { getBusinessSlug, getProductImages } from '../utils/product'
 
 function ProductDetailPage() {
   const { slug } = useParams()
@@ -64,6 +64,9 @@ function ProductDetailPage() {
           ))}
         </div>
         <div className="space-y-4 p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {product.businessName || getBusinessSlug(product)}
+          </p>
           <p className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
             {product.category}
           </p>
