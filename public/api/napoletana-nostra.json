@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-29T17:43:45.244Z",
+  "generatedAt": "2026-04-29T17:44:54.344Z",
   "business": {
     "slug": "napoletana-nostra",
     "name": "Napoletana Nostra",
@@ -12,5 +12,18 @@
       "sku"
     ]
   },
-  "products": []
+  "products": [
+    {
+      "name": "Coca Cola",
+      "slug": "coca-cola",
+      "businessSlug": "napoletana-nostra",
+      "businessName": "Napoletana Nostra",
+      "category": "Pije",
+      "description": "Cold",
+      "details": {},
+      "images": [
+        "https://kresha325.github.io/Product-System/images/coca-cola/1.webp"
+      ]
+    }
+  ]
 }
