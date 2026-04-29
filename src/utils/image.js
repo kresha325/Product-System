@@ -17,6 +17,16 @@ function loadImage(file) {
   })
 }
 
+export async function fetchUrlAsWebpBase64(url) {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error('Could not load existing image.')
+  }
+  const blob = await response.blob()
+  const file = new File([blob], 'existing.webp', { type: blob.type || 'image/jpeg' })
+  return fileToWebpBase64(file)
+}
+
 export async function fileToWebpBase64(file) {
   const img = await loadImage(file)
   const scale = Math.min(1, MAX_IMAGE_WIDTH / img.width)

@@ -43,7 +43,11 @@ async function githubRequest(path, options = {}) {
     const text = await response.text()
     throw new Error(`GitHub API error ${response.status}: ${text}`)
   }
-  return response.json()
+  if (response.status === 204) {
+    return null
+  }
+  const raw = await response.text()
+  return raw ? JSON.parse(raw) : null
 }
 
 function decodeContent(content) {
@@ -58,9 +62,55 @@ function encodeContent(content) {
   return btoa(binary)
 }
 
-export function getGitHubPagesImageUrl(slug) {
+function buildGalleryPageUrl(slug, index) {
   const { owner, repo } = config()
-  return `https://${owner}.github.io/${repo}/images/${slug}.webp`
+  return `https://${owner}.github.io/${repo}/images/${slug}/${index}.webp`
+}
+
+async function deleteGalleryFolderContents(slug) {
+  const folderPath = `public/images/${slug}`
+  try {
+    const data = await githubRequest(`/contents/${folderPath}`)
+    if (!Array.isArray(data)) {
+      return
+    }
+    for (const item of data) {
+      await deleteRepoFile({ path: item.path, message: `Remove ${item.path}` })
+    }
+  } catch {
+    // Folder missing or empty.
+  }
+}
+
+async function deleteLegacySingleImage(slug) {
+  try {
+    await deleteRepoFile({
+      path: `public/images/${slug}.webp`,
+      message: `Remove legacy image: ${slug}`,
+    })
+  } catch {
+    // Missing file.
+  }
+}
+
+export async function replaceProductGallery(slug, base64Images) {
+  if (!base64Images.length) {
+    throw new Error('At least one image is required.')
+  }
+  await deleteGalleryFolderContents(slug)
+  await deleteLegacySingleImage(slug)
+  const urls = []
+  for (let i = 0; i < base64Images.length; i++) {
+    const path = `public/images/${slug}/${i + 1}.webp`
+    await putRepoFile({
+      path,
+      content: base64Images[i],
+      message: `Upload gallery ${slug} ${i + 1}`,
+      contentBase64: true,
+    })
+    urls.push(buildGalleryPageUrl(slug, i + 1))
+  }
+  return urls
 }
 
 export async function getRepoFile(path) {
@@ -76,14 +126,18 @@ export async function putRepoFile({ path, content, message, sha, contentBase64 =
     ? String(content).replace(/\s/g, '')
     : encodeContent(content)
 
+  const body = {
+    message,
+    content: encoded,
+    branch: DEFAULT_BRANCH,
+  }
+  if (sha) {
+    body.sha = sha
+  }
+
   return githubRequest(`/contents/${path}`, {
     method: 'PUT',
-    body: JSON.stringify({
-      message,
-      content: encoded,
-      branch: DEFAULT_BRANCH,
-      sha,
-    }),
+    body: JSON.stringify(body),
   })
 }
 
@@ -135,41 +189,46 @@ export async function deleteProductBySlug(slug) {
     sha: file.sha,
   })
 
-  try {
-    await deleteRepoFile({
-      path: `public/images/${slug}.webp`,
-      message: `Delete product image: ${slug}`,
-    })
-  } catch {
-    // Ignore missing images, product record is already removed.
-  }
+  await deleteGalleryFolderContents(slug)
+  await deleteLegacySingleImage(slug)
 }
 
-export async function uploadProductImage(slug, base64Image) {
-  const imagePath = `public/images/${slug}.webp`
-  let existingSha
-  try {
-    const existing = await getRepoFile(imagePath)
-    existingSha = existing.sha
-  } catch {
-    existingSha = undefined
-  }
-  await putRepoFile({
-    path: imagePath,
-    content: base64Image,
-    message: `Upload product image: ${slug}`,
-    sha: existingSha,
-    contentBase64: true,
+export async function saveProductWithImages(productInput, base64Images) {
+  const slug = productInput.slug
+  const urls = await replaceProductGallery(slug, base64Images)
+  await appendProduct({
+    name: productInput.name,
+    slug,
+    category: productInput.category,
+    description: productInput.description,
+    images: urls,
   })
 }
 
-export async function saveProductWithImage(productInput, imageBase64) {
-  const slug = productInput.slug
-  const imageUrl = getGitHubPagesImageUrl(slug)
-  await uploadProductImage(slug, imageBase64)
-  await appendProduct({
-    ...productInput,
-    image: imageUrl,
+export async function updateProductWithImages(slug, fields, base64Images) {
+  const urls = await replaceProductGallery(slug, base64Images)
+  const filePath = 'data/products.json'
+  const file = await getRepoFile(filePath)
+  const products = JSON.parse(file.content)
+  const idx = products.findIndex((product) => product.slug === slug)
+
+  if (idx === -1) {
+    throw new Error('Product not found.')
+  }
+
+  products[idx] = {
+    ...products[idx],
+    ...fields,
+    slug,
+    images: urls,
+  }
+  delete products[idx].image
+
+  await putRepoFile({
+    path: filePath,
+    content: JSON.stringify(products, null, 2),
+    message: `Update product: ${slug}`,
+    sha: file.sha,
   })
 }
 

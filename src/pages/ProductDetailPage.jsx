@@ -4,6 +4,7 @@ import ImageWithFallback from '../components/ImageWithFallback'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import { getProductsDataUrl } from '../utils/github'
+import { getProductImages } from '../utils/product'
 
 function ProductDetailPage() {
   const { slug } = useParams()
@@ -51,8 +52,16 @@ function ProductDetailPage() {
         Back to products
       </Link>
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="aspect-video bg-slate-100">
-          <ImageWithFallback src={product.image} alt={product.name} loading="eager" />
+        <div className="grid gap-2 sm:grid-cols-2">
+          {getProductImages(product).map((src, index) => (
+            <div key={`${product.slug}-${index}`} className="aspect-video bg-slate-100">
+              <ImageWithFallback
+                src={src}
+                alt={`${product.name} ${index + 1}`}
+                loading={index === 0 ? 'eager' : 'lazy'}
+              />
+            </div>
+          ))}
         </div>
         <div className="space-y-4 p-6">
           <p className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">

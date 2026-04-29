@@ -1,31 +1,44 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
-import { deleteProductBySlug, listProductsFromRepo, saveProductWithImage } from '../utils/github'
-import { fileToWebpBase64 } from '../utils/image'
+import {
+  deleteProductBySlug,
+  listProductsFromRepo,
+  saveProductWithImages,
+  updateProductWithImages,
+} from '../utils/github'
+import { fetchUrlAsWebpBase64, fileToWebpBase64 } from '../utils/image'
+import { getProductImages } from '../utils/product'
 import { toSlug } from '../utils/slug'
 
 const INITIAL_FORM = {
   name: '',
   category: '',
   description: '',
-  imageFile: null,
+}
+
+function makeId() {
+  return `g-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 }
 
 function AdminPage() {
+  const navigate = useNavigate()
+  const { slug: editSlugParam } = useParams()
+
   const [form, setForm] = useState(INITIAL_FORM)
-  const [previewUrl, setPreviewUrl] = useState('')
+  const [galleryItems, setGalleryItems] = useState([])
   const [status, setStatus] = useState({ type: 'info', message: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [products, setProducts] = useState([])
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [deletingSlug, setDeletingSlug] = useState('')
 
-  const slug = useMemo(() => toSlug(form.name), [form.name])
+  const derivedSlug = useMemo(() => toSlug(form.name), [form.name])
+  const activeSlug = editSlugParam ?? derivedSlug
 
   async function fetchProducts() {
-    const items = await listProductsFromRepo()
-    return items
+    return listProductsFromRepo()
   }
 
   async function loadProducts() {
@@ -68,50 +81,158 @@ function AdminPage() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!editSlugParam) {
+      return
+    }
+
+    let cancelled = false
+
+    async function loadEdit() {
+      setStatus({ type: 'info', message: '' })
+      try {
+        const items = await listProductsFromRepo()
+        const found = items.find((p) => p.slug === editSlugParam)
+        if (!found || cancelled) {
+          if (!cancelled) {
+            setStatus({ type: 'error', message: 'Product not found.' })
+          }
+          return
+        }
+        setForm({
+          name: found.name,
+          category: found.category,
+          description: found.description,
+        })
+        const imgs = getProductImages(found)
+        setGalleryItems(
+          imgs.map((url) => ({
+            id: makeId(),
+            kind: 'existing',
+            url,
+          })),
+        )
+      } catch (err) {
+        if (!cancelled) {
+          setStatus({ type: 'error', message: err.message || 'Failed to load product.' })
+        }
+      }
+    }
+
+    loadEdit()
+
+    return () => {
+      cancelled = true
+    }
+  }, [editSlugParam])
+
   function updateField(event) {
     const { name, value } = event.target
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
-  function updateImage(event) {
-    const file = event.target.files?.[0]
-    if (!file) {
+  function addFiles(event) {
+    const files = Array.from(event.target.files || [])
+    if (!files.length) {
       return
     }
-    setForm((prev) => ({ ...prev, imageFile: file }))
-    setPreviewUrl(URL.createObjectURL(file))
+    setGalleryItems((prev) => [
+      ...prev,
+      ...files.map((file) => ({
+        id: makeId(),
+        kind: 'pending',
+        file,
+        preview: URL.createObjectURL(file),
+      })),
+    ])
+    event.target.value = ''
+  }
+
+  function removeGalleryItem(id) {
+    setGalleryItems((prev) => {
+      const item = prev.find((entry) => entry.id === id)
+      if (item?.kind === 'pending' && item.preview) {
+        URL.revokeObjectURL(item.preview)
+      }
+      return prev.filter((entry) => entry.id !== id)
+    })
+  }
+
+  async function buildBase64Gallery() {
+    const result = []
+    for (const item of galleryItems) {
+      if (item.kind === 'pending') {
+        result.push(await fileToWebpBase64(item.file))
+      } else {
+        result.push(await fetchUrlAsWebpBase64(item.url))
+      }
+    }
+    return result
   }
 
   async function onSubmit(event) {
     event.preventDefault()
     setStatus({ type: 'info', message: '' })
 
-    if (!form.name || !form.category || !form.description || !form.imageFile) {
+    if (!form.name || !form.category || !form.description) {
       setStatus({ type: 'error', message: 'Please complete all fields before submitting.' })
       return
     }
 
-    if (!slug) {
+    if (!galleryItems.length) {
+      setStatus({ type: 'error', message: 'Please add at least one image.' })
+      return
+    }
+
+    if (!activeSlug) {
       setStatus({ type: 'error', message: 'Invalid product name. Please adjust it.' })
       return
     }
 
+    if (!editSlugParam) {
+      const existing = await listProductsFromRepo()
+      if (existing.some((p) => p.slug === activeSlug)) {
+        setStatus({ type: 'error', message: 'A product with this slug already exists.' })
+        return
+      }
+    }
+
     setIsSubmitting(true)
     try {
-      const imageBase64 = await fileToWebpBase64(form.imageFile)
-      await saveProductWithImage(
-        {
-          name: form.name.trim(),
-          slug,
-          category: form.category.trim(),
-          description: form.description.trim(),
-        },
-        imageBase64,
-      )
+      const base64Images = await buildBase64Gallery()
+      if (editSlugParam) {
+        await updateProductWithImages(
+          editSlugParam,
+          {
+            name: form.name.trim(),
+            category: form.category.trim(),
+            description: form.description.trim(),
+          },
+          base64Images,
+        )
+      } else {
+        await saveProductWithImages(
+          {
+            name: form.name.trim(),
+            slug: activeSlug,
+            category: form.category.trim(),
+            description: form.description.trim(),
+          },
+          base64Images,
+        )
+      }
       setForm(INITIAL_FORM)
-      setPreviewUrl('')
+      galleryItems.forEach((item) => {
+        if (item.kind === 'pending' && item.preview) {
+          URL.revokeObjectURL(item.preview)
+        }
+      })
+      setGalleryItems([])
       setStatus({ type: 'success', message: 'Product saved to GitHub successfully.' })
       await loadProducts()
+      if (editSlugParam) {
+        navigate('/admin')
+      }
     } catch (err) {
       setStatus({
         type: 'error',
@@ -129,6 +250,9 @@ function AdminPage() {
       await deleteProductBySlug(slugToDelete)
       setStatus({ type: 'success', message: 'Product deleted successfully.' })
       await loadProducts()
+      if (editSlugParam === slugToDelete) {
+        navigate('/admin')
+      }
     } catch (err) {
       setStatus({
         type: 'error',
@@ -139,13 +263,26 @@ function AdminPage() {
     }
   }
 
+  const heading = editSlugParam ? 'Edit Product' : 'Admin Panel'
+
   return (
     <section className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Admin Panel</h1>
-        <p className="mt-1 text-slate-600">
-          Add products directly to your GitHub repository with no database.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">{heading}</h1>
+          <p className="mt-1 text-slate-600">
+            Add products directly to your GitHub repository with no database.
+          </p>
+        </div>
+        {editSlugParam ? (
+          <button
+            type="button"
+            onClick={() => navigate('/admin')}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Cancel edit
+          </button>
+        ) : null}
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -160,7 +297,8 @@ function AdminPage() {
               type="text"
               value={form.name}
               onChange={updateField}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+              readOnly={Boolean(editSlugParam)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none read-only:bg-slate-50"
               placeholder="e.g. Smart Backpack"
             />
           </div>
@@ -196,29 +334,44 @@ function AdminPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700" htmlFor="imageFile">
-              Product Image
+            <label className="text-sm font-medium text-slate-700" htmlFor="imageFiles">
+              Product Images
             </label>
             <input
-              id="imageFile"
-              name="imageFile"
+              id="imageFiles"
+              name="imageFiles"
               type="file"
               accept="image/*"
-              onChange={updateImage}
+              multiple
+              onChange={addFiles}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-slate-700"
             />
-            {previewUrl && (
-              <img
-                src={previewUrl}
-                alt="Preview"
-                className="mt-2 h-44 w-full rounded-lg border border-slate-200 object-cover"
-              />
+            {galleryItems.length > 0 && (
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {galleryItems.map((item) => (
+                  <div key={item.id} className="relative overflow-hidden rounded-lg border border-slate-200">
+                    <img
+                      src={item.kind === 'pending' ? item.preview : item.url}
+                      alt=""
+                      className="aspect-square w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeGalleryItem(item.id)}
+                      className="absolute right-1 top-1 rounded bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
-          {slug && (
+          {activeSlug && (
             <p className="text-xs text-slate-500">
-              Generated slug: <span className="font-mono">{slug}</span>
+              Slug: <span className="font-mono">{activeSlug}</span>
+              {editSlugParam ? <span className="ml-2">(cannot change slug)</span> : null}
             </p>
           )}
 
@@ -236,7 +389,7 @@ function AdminPage() {
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Manage Products</h2>
-        <p className="mt-1 text-sm text-slate-600">Delete products and their images from the repository.</p>
+        <p className="mt-1 text-sm text-slate-600">Edit or delete products in the repository.</p>
 
         {isLoadingProducts ? (
           <div className="mt-4">
@@ -249,20 +402,28 @@ function AdminPage() {
             {products.map((product) => (
               <div
                 key={product.slug}
-                className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-4 py-3"
               >
                 <div>
                   <p className="font-medium text-slate-900">{product.name}</p>
                   <p className="text-xs text-slate-500">{product.slug}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onDelete(product.slug)}
-                  disabled={deletingSlug === product.slug}
-                  className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-                >
-                  {deletingSlug === product.slug ? 'Deleting...' : 'Delete'}
-                </button>
+                <div className="flex gap-2">
+                  <Link
+                    to={`/admin/edit/${product.slug}`}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Edit
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(product.slug)}
+                    disabled={deletingSlug === product.slug}
+                    className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                  >
+                    {deletingSlug === product.slug ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

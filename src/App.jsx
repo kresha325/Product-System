@@ -12,7 +12,7 @@ function App() {
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
         <Routes>
           <Route path="/" element={<Navigate replace to="/products" />} />
-          <Route path="/admin" element={<AdminGate />} />
+          <Route path="/admin/*" element={<AdminGate />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/product/:slug" element={<ProductDetailPage />} />
           <Route path="*" element={<NotFoundPage />} />

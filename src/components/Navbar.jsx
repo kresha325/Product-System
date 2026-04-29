@@ -19,7 +19,7 @@ function Navbar() {
           <NavLink to="/products" className={linkClass}>
             Products
           </NavLink>
-          <NavLink to="/admin" className={linkClass}>
+          <NavLink to="/admin" end className={linkClass}>
             Admin
           </NavLink>
         </nav>

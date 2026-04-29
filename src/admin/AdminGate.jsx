@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Route, Routes } from 'react-router-dom'
 import AdminPage from './AdminPage'
 
 const SESSION_KEY = 'product-system-admin-auth'
@@ -29,7 +30,12 @@ function AdminGate() {
   }
 
   if (isUnlocked) {
-    return <AdminPage />
+    return (
+      <Routes>
+        <Route index element={<AdminPage />} />
+        <Route path="edit/:slug" element={<AdminPage />} />
+      </Routes>
+    )
   }
 
   return (
