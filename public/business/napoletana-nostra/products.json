@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-04-29T17:43:45.244Z",
+  "business": {
+    "slug": "napoletana-nostra",
+    "name": "Napoletana Nostra",
+    "description": "",
+    "enabledFields": [
+      "price",
+      "brand",
+      "currency",
+      "tags",
+      "sku"
+    ]
+  },
+  "products": []
+}
