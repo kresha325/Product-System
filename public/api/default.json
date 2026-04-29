@@ -1,10 +1,11 @@
 {
-  "generatedAt": "2026-04-29T17:44:52.107Z",
+  "generatedAt": "2026-04-29T20:03:19.065Z",
   "business": {
     "slug": "default",
     "name": "Default business",
     "description": "",
     "enabledFields": []
   },
+  "categories": [],
   "products": []
 }
