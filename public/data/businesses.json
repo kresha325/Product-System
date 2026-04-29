@@ -2,6 +2,7 @@
   {
     "slug": "default",
     "name": "Default business",
-    "description": ""
+    "description": "",
+    "enabledFields": []
   }
 ]

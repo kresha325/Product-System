@@ -11,6 +11,7 @@ import {
 } from '../utils/github'
 import { fetchUrlAsWebpBase64, fileToWebpBase64 } from '../utils/image'
 import { DEFAULT_BUSINESS_SLUG, getBusinessSlug, getProductImages } from '../utils/product'
+import { PRODUCT_OPTIONAL_FIELD_MAP } from '../utils/productFields'
 import { toSlug } from '../utils/slug'
 
 const INITIAL_FORM = {
@@ -18,6 +19,7 @@ const INITIAL_FORM = {
   category: '',
   description: '',
   businessSlug: DEFAULT_BUSINESS_SLUG,
+  details: {},
 }
 
 function makeId() {
@@ -39,6 +41,10 @@ function AdminPage() {
 
   const derivedSlug = useMemo(() => toSlug(form.name), [form.name])
   const activeSlug = editSlugParam ?? derivedSlug
+  const activeBusiness = businesses.find((business) => business.slug === form.businessSlug)
+  const enabledOptionalFields = Array.isArray(activeBusiness?.enabledFields)
+    ? activeBusiness.enabledFields
+    : []
 
   async function fetchProducts() {
     return listProductsFromRepo()
@@ -130,6 +136,7 @@ function AdminPage() {
           category: found.category,
           description: found.description,
           businessSlug: getBusinessSlug(found),
+          details: found.details && typeof found.details === 'object' ? found.details : {},
         })
         const imgs = getProductImages(found)
         setGalleryItems(
@@ -156,6 +163,54 @@ function AdminPage() {
   function updateField(event) {
     const { name, value } = event.target
     setForm((prev) => ({ ...prev, [name]: value }))
+  }
+
+  function updateDetailField(event) {
+    const { name, value } = event.target
+    setForm((prev) => ({
+      ...prev,
+      details: {
+        ...(prev.details || {}),
+        [name]: value,
+      },
+    }))
+  }
+
+  function cleanEnabledDetails(details, enabledFieldIds) {
+    const next = {}
+    for (const fieldId of enabledFieldIds) {
+      const raw = details?.[fieldId]
+      if (raw === undefined || raw === null) {
+        continue
+      }
+      const value = String(raw).trim()
+      if (!value) {
+        continue
+      }
+      if (fieldId === 'price') {
+        const parsed = Number(value)
+        if (!Number.isNaN(parsed)) {
+          next[fieldId] = parsed
+        }
+        continue
+      }
+      if (fieldId === 'stockQuantity') {
+        const parsed = parseInt(value, 10)
+        if (!Number.isNaN(parsed)) {
+          next[fieldId] = parsed
+        }
+        continue
+      }
+      if (fieldId === 'tags') {
+        next[fieldId] = value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+        continue
+      }
+      next[fieldId] = value
+    }
+    return next
   }
 
   function addFiles(event) {
@@ -229,6 +284,7 @@ function AdminPage() {
       const base64Images = await buildBase64Gallery()
       const bizLabel =
         businesses.find((business) => business.slug === form.businessSlug)?.name ?? form.businessSlug
+      const cleanedDetails = cleanEnabledDetails(form.details, enabledOptionalFields)
 
       if (editSlugParam) {
         await updateProductWithImages(
@@ -239,6 +295,7 @@ function AdminPage() {
             description: form.description.trim(),
             businessSlug: form.businessSlug,
             businessName: bizLabel,
+            details: cleanedDetails,
           },
           base64Images,
         )
@@ -251,6 +308,7 @@ function AdminPage() {
             description: form.description.trim(),
             businessSlug: form.businessSlug,
             businessName: bizLabel,
+            details: cleanedDetails,
           },
           base64Images,
         )
@@ -475,6 +533,34 @@ function AdminPage() {
                     <span className="font-mono">{getBusinessSlug(product)}</span>
                   </p>
                 </div>
+
+          {enabledOptionalFields.length > 0 ? (
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-800">Optional fields enabled by business</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {enabledOptionalFields
+                  .map((fieldId) => PRODUCT_OPTIONAL_FIELD_MAP[fieldId])
+                  .filter(Boolean)
+                  .map((field) => (
+                    <div key={field.id} className="space-y-1">
+                      <label className="text-xs font-medium text-slate-700" htmlFor={`detail-${field.id}`}>
+                        {field.label}
+                      </label>
+                      <input
+                        id={`detail-${field.id}`}
+                        name={field.id}
+                        type={field.type}
+                        step={field.step}
+                        value={form.details?.[field.id] ?? ''}
+                        onChange={updateDetailField}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+                        placeholder={field.placeholder}
+                      />
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ) : null}
                 <div className="flex gap-2">
                   <Link
                     to={`/admin/edit/${product.slug}`}

@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
-import { deleteBusiness, listBusinessesFromRepo, saveBusiness } from '../utils/github'
+import { deleteBusiness, listBusinessesFromRepo, saveBusiness, updateBusiness } from '../utils/github'
+import { PRODUCT_OPTIONAL_FIELDS } from '../utils/productFields'
 import { toSlug } from '../utils/slug'
 
 const INITIAL = {
   name: '',
   description: '',
+  enabledFields: [],
 }
 
 function BusinessAdminPage() {
@@ -17,6 +19,7 @@ function BusinessAdminPage() {
   const [status, setStatus] = useState({ type: 'info', message: '' })
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState('')
+  const [editingSlug, setEditingSlug] = useState('')
 
   const previewSlug = useMemo(() => toSlug(form.name), [form.name])
 
@@ -52,6 +55,18 @@ function BusinessAdminPage() {
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
+  function toggleField(fieldId) {
+    setForm((prev) => {
+      const exists = prev.enabledFields.includes(fieldId)
+      return {
+        ...prev,
+        enabledFields: exists
+          ? prev.enabledFields.filter((id) => id !== fieldId)
+          : [...prev.enabledFields, fieldId],
+      }
+    })
+  }
+
   async function refreshBusinesses() {
     const list = await listBusinessesFromRepo()
     setBusinesses(list)
@@ -60,19 +75,29 @@ function BusinessAdminPage() {
   async function onSubmit(event) {
     event.preventDefault()
     setStatus({ type: 'info', message: '' })
-    if (!form.name.trim() || !previewSlug) {
+    if (!form.name.trim() || (!previewSlug && !editingSlug)) {
       setStatus({ type: 'error', message: 'Please enter a valid business name.' })
       return
     }
     setSubmitting(true)
     try {
-      await saveBusiness({
-        slug: previewSlug,
-        name: form.name.trim(),
-        description: form.description.trim(),
-      })
+      if (editingSlug) {
+        await updateBusiness(editingSlug, {
+          name: form.name,
+          description: form.description,
+          enabledFields: form.enabledFields,
+        })
+      } else {
+        await saveBusiness({
+          slug: previewSlug,
+          name: form.name.trim(),
+          description: form.description.trim(),
+          enabledFields: form.enabledFields,
+        })
+      }
       setForm(INITIAL)
-      setStatus({ type: 'success', message: 'Business saved to GitHub.' })
+      setEditingSlug('')
+      setStatus({ type: 'success', message: editingSlug ? 'Business updated.' : 'Business saved to GitHub.' })
       await refreshBusinesses()
     } catch (err) {
       setStatus({ type: 'error', message: err.message || 'Failed to save business.' })
@@ -93,6 +118,22 @@ function BusinessAdminPage() {
     } finally {
       setDeleting('')
     }
+  }
+
+  function startEdit(business) {
+    setEditingSlug(business.slug)
+    setForm({
+      name: business.name || '',
+      description: business.description || '',
+      enabledFields: Array.isArray(business.enabledFields) ? business.enabledFields : [],
+    })
+    setStatus({ type: 'info', message: '' })
+  }
+
+  function cancelEdit() {
+    setEditingSlug('')
+    setForm(INITIAL)
+    setStatus({ type: 'info', message: '' })
   }
 
   return (
@@ -129,6 +170,25 @@ function BusinessAdminPage() {
             />
           </div>
           <div className="space-y-2">
+            <p className="text-sm font-medium text-slate-700">Active product fields for this business</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {PRODUCT_OPTIONAL_FIELDS.map((field) => (
+                <label key={field.id} className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={form.enabledFields.includes(field.id)}
+                    onChange={() => toggleField(field.id)}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  {field.label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500">
+              Only selected fields will appear while creating products for this business.
+            </p>
+          </div>
+          <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700" htmlFor="biz-desc">
               Description
             </label>
@@ -144,16 +204,27 @@ function BusinessAdminPage() {
           </div>
           {previewSlug ? (
             <p className="text-xs text-slate-500">
-              Slug: <span className="font-mono">{previewSlug}</span>
+              Slug: <span className="font-mono">{editingSlug || previewSlug}</span>
             </p>
           ) : null}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
-          >
-            {submitting ? <LoadingSpinner label="Saving..." /> : 'Save business'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
+            >
+              {submitting ? <LoadingSpinner label="Saving..." /> : editingSlug ? 'Update business' : 'Save business'}
+            </button>
+            {editingSlug ? (
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            ) : null}
+          </div>
         </form>
       </div>
 
@@ -177,16 +248,28 @@ function BusinessAdminPage() {
                 <div>
                   <p className="font-medium text-slate-900">{b.name}</p>
                   <p className="text-xs text-slate-500 font-mono">{b.slug}</p>
+                  <p className="text-xs text-slate-500">
+                    Fields: {Array.isArray(b.enabledFields) && b.enabledFields.length > 0 ? b.enabledFields.join(', ') : 'none'}
+                  </p>
                 </div>
                 {b.slug !== 'default' ? (
-                  <button
-                    type="button"
-                    disabled={deleting === b.slug}
-                    onClick={() => onDelete(b.slug)}
-                    className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:bg-red-300"
-                  >
-                    {deleting === b.slug ? '...' : 'Delete'}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(b)}
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deleting === b.slug}
+                      onClick={() => onDelete(b.slug)}
+                      className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:bg-red-300"
+                    >
+                      {deleting === b.slug ? '...' : 'Delete'}
+                    </button>
+                  </div>
                 ) : (
                   <span className="text-xs text-slate-400">Protected</span>
                 )}

@@ -6,6 +6,7 @@ import Notification from '../components/Notification'
 import { getProductsDataUrl } from '../utils/github'
 import { isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug, getProductImages } from '../utils/product'
+import { PRODUCT_OPTIONAL_FIELD_MAP } from '../utils/productFields'
 
 function ProductDetailPage() {
   const { slug } = useParams()
@@ -48,6 +49,12 @@ function ProductDetailPage() {
   }
 
   const showAdminEdit = isAdminSession()
+  const detailEntries = Object.entries(product.details || {}).filter(([, value]) => {
+    if (Array.isArray(value)) {
+      return value.length > 0
+    }
+    return value !== undefined && value !== null && String(value).trim() !== ''
+  })
 
   return (
     <article className="space-y-5">
@@ -85,6 +92,23 @@ function ProductDetailPage() {
           </p>
           <h1 className="text-3xl font-bold text-slate-900">{product.name}</h1>
           <p className="leading-relaxed text-slate-700">{product.description}</p>
+          {detailEntries.length > 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <h2 className="text-sm font-semibold text-slate-900">Specifications</h2>
+              <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {detailEntries.map(([key, value]) => (
+                  <div key={key} className="rounded-md bg-white px-3 py-2">
+                    <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      {PRODUCT_OPTIONAL_FIELD_MAP[key]?.label || key}
+                    </dt>
+                    <dd className="text-sm font-medium text-slate-900">
+                      {Array.isArray(value) ? value.join(', ') : String(value)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ) : null}
         </div>
       </div>
     </article>

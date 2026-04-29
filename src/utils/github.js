@@ -167,6 +167,7 @@ async function syncBusinessApiArtifacts(products, businesses) {
       slug: business.slug,
       name: business.name,
       description: business.description ?? '',
+      enabledFields: Array.isArray(business.enabledFields) ? business.enabledFields : [],
       productCount: products.filter((product) => getBusinessSlug(product) === business.slug).length,
     })),
   }
@@ -183,6 +184,7 @@ async function syncBusinessApiArtifacts(products, businesses) {
           slug: business.slug,
           name: business.name,
           description: business.description ?? '',
+          enabledFields: Array.isArray(business.enabledFields) ? business.enabledFields : [],
         },
         products: filtered,
       },
@@ -219,9 +221,14 @@ export async function listBusinessesFromRepo() {
   try {
     const file = await getRepoFile('data/businesses.json')
     const businesses = JSON.parse(file.content)
-    return Array.isArray(businesses) ? businesses : []
+    return Array.isArray(businesses)
+      ? businesses.map((business) => ({
+          ...business,
+          enabledFields: Array.isArray(business.enabledFields) ? business.enabledFields : [],
+        }))
+      : []
   } catch {
-    return [{ slug: 'default', name: 'Default business', description: '' }]
+    return [{ slug: 'default', name: 'Default business', description: '', enabledFields: [] }]
   }
 }
 
@@ -242,7 +249,7 @@ async function writeBusinessesAndSync(businesses, message) {
   await syncBusinessApiArtifacts(products, businesses)
 }
 
-export async function saveBusiness({ slug, name, description }) {
+export async function saveBusiness({ slug, name, description, enabledFields = [] }) {
   const businesses = await listBusinessesFromRepo()
   if (businesses.some((business) => business.slug === slug)) {
     throw new Error('A business with this slug already exists.')
@@ -251,8 +258,43 @@ export async function saveBusiness({ slug, name, description }) {
     slug,
     name,
     description: description ?? '',
+    enabledFields: Array.isArray(enabledFields) ? enabledFields : [],
   })
   await writeBusinessesAndSync(businesses, `Add business ${slug}`)
+}
+
+export async function updateBusiness(slug, updates) {
+  const businesses = await listBusinessesFromRepo()
+  const idx = businesses.findIndex((business) => business.slug === slug)
+  if (idx === -1) {
+    throw new Error('Business not found.')
+  }
+
+  businesses[idx] = {
+    ...businesses[idx],
+    name: updates.name?.trim() || businesses[idx].name,
+    description: updates.description?.trim() ?? businesses[idx].description ?? '',
+    enabledFields: Array.isArray(updates.enabledFields)
+      ? updates.enabledFields
+      : businesses[idx].enabledFields ?? [],
+  }
+
+  const products = await listProductsFromRepo()
+  const nextProducts = products.map((product) =>
+    getBusinessSlug(product) === slug
+      ? { ...product, businessName: businesses[idx].name }
+      : product,
+  )
+
+  const file = await getRepoFile('data/products.json')
+  await putRepoFile({
+    path: 'data/products.json',
+    content: JSON.stringify(nextProducts, null, 2),
+    message: `Sync products businessName: ${slug}`,
+    sha: file.sha,
+  })
+
+  await writeBusinessesAndSync(businesses, `Update business ${slug}`)
 }
 
 export async function deleteBusiness(slug) {
@@ -311,6 +353,7 @@ export async function saveProductWithImages(productInput, base64Images) {
     businessName: productInput.businessName,
     category: productInput.category,
     description: productInput.description,
+    details: productInput.details ?? {},
     images: urls,
   })
 }
