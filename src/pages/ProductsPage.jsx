@@ -4,6 +4,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import ProductCard from '../components/ProductCard'
 import { getBusinessesDataUrl, getProductsDataUrl } from '../utils/github'
+import { getCurrentAdmin, isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug } from '../utils/product'
 
 function ProductsPage() {
@@ -14,6 +15,8 @@ function ProductsPage() {
   const [businesses, setBusinesses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const currentAdmin = useMemo(() => getCurrentAdmin(), [])
+  const isAdmin = isAdminSession()
   const selectedBusinessSlug = routeBusinessSlug || searchParams.get('business') || ''
 
   useEffect(() => {
@@ -57,20 +60,35 @@ function ProductsPage() {
     loadBusinesses()
   }, [])
 
-  const filteredProducts = useMemo(() => {
-    if (!selectedBusinessSlug) {
+  const visibleBusinesses = useMemo(() => {
+    if (!isAdmin || !currentAdmin || currentAdmin.role === 'super_admin') {
+      return businesses
+    }
+    return businesses.filter((business) => business.createdBy === currentAdmin.username)
+  }, [businesses, currentAdmin, isAdmin])
+
+  const visibleProducts = useMemo(() => {
+    if (!isAdmin || !currentAdmin || currentAdmin.role === 'super_admin') {
       return products
     }
-    return products.filter((product) => getBusinessSlug(product) === selectedBusinessSlug)
-  }, [products, selectedBusinessSlug])
+    const ownedSlugs = new Set(visibleBusinesses.map((business) => business.slug))
+    return products.filter((product) => ownedSlugs.has(getBusinessSlug(product)))
+  }, [products, visibleBusinesses, currentAdmin, isAdmin])
+
+  const filteredProducts = useMemo(() => {
+    if (!selectedBusinessSlug) {
+      return visibleProducts
+    }
+    return visibleProducts.filter((product) => getBusinessSlug(product) === selectedBusinessSlug)
+  }, [visibleProducts, selectedBusinessSlug])
 
   const selectedBusinessName = useMemo(() => {
     if (!selectedBusinessSlug) {
       return ''
     }
-    const business = businesses.find((entry) => entry.slug === selectedBusinessSlug)
+    const business = visibleBusinesses.find((entry) => entry.slug === selectedBusinessSlug)
     return business?.name || selectedBusinessSlug
-  }, [businesses, selectedBusinessSlug])
+  }, [visibleBusinesses, selectedBusinessSlug])
 
   const heading = selectedBusinessSlug ? `Products · ${selectedBusinessName}` : 'Products'
 
@@ -98,7 +116,7 @@ function ProductsPage() {
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
           >
             <option value="">All businesses</option>
-            {businesses.map((business) => (
+            {visibleBusinesses.map((business) => (
               <option key={business.slug} value={business.slug}>
                 {business.name}
               </option>
@@ -122,7 +140,20 @@ function ProductsPage() {
       {!loading && !error && filteredProducts.length > 0 ? (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {filteredProducts.map((product) => (
-            <ProductCard key={product.slug} product={product} />
+            <ProductCard
+              key={product.slug}
+              product={product}
+              showAdminEdit={
+                isAdmin &&
+                (!!currentAdmin &&
+                  (currentAdmin.role === 'super_admin' ||
+                    visibleBusinesses.some(
+                      (business) =>
+                        business.slug === getBusinessSlug(product) &&
+                        business.createdBy === currentAdmin.username,
+                    )))
+              }
+            />
           ))}
         </div>
       ) : null}

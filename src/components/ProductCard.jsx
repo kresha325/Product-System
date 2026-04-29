@@ -1,11 +1,9 @@
 import { Link } from 'react-router-dom'
 import ImageWithFallback from './ImageWithFallback'
-import { isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug, getProductImages } from '../utils/product'
 
-function ProductCard({ product }) {
+function ProductCard({ product, showAdminEdit = false }) {
   const cover = getProductImages(product)[0]
-  const showAdminEdit = isAdminSession()
 
   return (
     <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
