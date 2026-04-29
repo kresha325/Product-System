@@ -5,6 +5,7 @@ const SESSION_KEY = 'product-system-admin-auth'
 
 function AdminGate() {
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(
     () => sessionStorage.getItem(SESSION_KEY) === 'true',
@@ -14,13 +15,15 @@ function AdminGate() {
 
   function handleSubmit(event) {
     event.preventDefault()
+    const normalizedExpectedPassword = expectedPassword?.trim()
+    const normalizedPassword = password.trim()
 
-    if (!expectedPassword) {
-      setError('Admin password nuk eshte konfiguruar ne .env.')
+    if (!normalizedExpectedPassword) {
+      setError('Admin password nuk eshte konfiguruar ne .env ose GitHub Secrets.')
       return
     }
 
-    if (password !== expectedPassword) {
+    if (normalizedPassword !== normalizedExpectedPassword) {
       setError('Password gabim.')
       return
     }
@@ -44,14 +47,24 @@ function AdminGate() {
           <label htmlFor="admin-password" className="text-sm font-medium text-slate-700">
             Password
           </label>
-          <input
-            id="admin-password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
-            placeholder="********"
-          />
+          <div className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 focus-within:border-blue-400">
+            <input
+              id="admin-password"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="w-full bg-transparent text-sm outline-none"
+              placeholder="********"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="text-xs font-medium text-slate-600 hover:text-slate-900"
+              aria-label={showPassword ? 'Fsheh password' : 'Shfaq password'}
+            >
+              {showPassword ? 'Fsheh' : 'Shfaq'}
+            </button>
+          </div>
         </div>
 
         {error && <p className="text-sm font-medium text-red-600">{error}</p>}

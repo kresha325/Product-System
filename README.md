@@ -48,3 +48,6 @@ npm run build
 - In repository settings, open `Settings -> Pages`.
 - Under Source, select `GitHub Actions`.
 - Every push to `main` deploys automatically to Pages.
+- Add these repository secrets in `Settings -> Secrets and variables -> Actions -> Secrets`:
+  - `VITE_ADMIN_PASSWORD`
+  - `VITE_GITHUB_TOKEN`
