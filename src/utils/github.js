@@ -176,19 +176,25 @@ async function syncBusinessApiArtifacts(products, businesses) {
 
   for (const business of businesses) {
     const filtered = products.filter((product) => getBusinessSlug(product) === business.slug)
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      business: {
+        slug: business.slug,
+        name: business.name,
+        description: business.description ?? '',
+        enabledFields: Array.isArray(business.enabledFields) ? business.enabledFields : [],
+      },
+      products: filtered,
+    }
     await putJsonFile(
       `public/api/${business.slug}.json`,
-      {
-        generatedAt: new Date().toISOString(),
-        business: {
-          slug: business.slug,
-          name: business.name,
-          description: business.description ?? '',
-          enabledFields: Array.isArray(business.enabledFields) ? business.enabledFields : [],
-        },
-        products: filtered,
-      },
+      payload,
       `Sync API bundle ${business.slug}`,
+    )
+    await putJsonFile(
+      `public/business/${business.slug}/products.json`,
+      payload,
+      `Sync business products ${business.slug}`,
     )
   }
 }
@@ -311,6 +317,14 @@ export async function deleteBusiness(slug) {
     await deleteRepoFile({
       path: `public/api/${slug}.json`,
       message: `Remove API bundle for ${slug}`,
+    })
+  } catch {
+    // Missing file is fine.
+  }
+  try {
+    await deleteRepoFile({
+      path: `public/business/${slug}/products.json`,
+      message: `Remove business products bundle for ${slug}`,
     })
   } catch {
     // Missing file is fine.
