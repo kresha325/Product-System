@@ -71,12 +71,16 @@ export async function getRepoFile(path) {
   }
 }
 
-export async function putRepoFile({ path, content, message, sha }) {
+export async function putRepoFile({ path, content, message, sha, contentBase64 = false }) {
+  const encoded = contentBase64
+    ? String(content).replace(/\s/g, '')
+    : encodeContent(content)
+
   return githubRequest(`/contents/${path}`, {
     method: 'PUT',
     body: JSON.stringify({
       message,
-      content: encodeContent(content),
+      content: encoded,
       branch: DEFAULT_BRANCH,
       sha,
     }),
@@ -110,6 +114,7 @@ export async function uploadProductImage(slug, base64Image) {
     content: base64Image,
     message: `Upload product image: ${slug}`,
     sha: existingSha,
+    contentBase64: true,
   })
 }
 
