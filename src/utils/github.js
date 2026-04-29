@@ -100,6 +100,51 @@ export async function appendProduct(product) {
   })
 }
 
+export async function listProductsFromRepo() {
+  const file = await getRepoFile('data/products.json')
+  const products = JSON.parse(file.content)
+  return Array.isArray(products) ? products : []
+}
+
+export async function deleteRepoFile({ path, message }) {
+  const existing = await getRepoFile(path)
+  await githubRequest(`/contents/${path}`, {
+    method: 'DELETE',
+    body: JSON.stringify({
+      message,
+      sha: existing.sha,
+      branch: DEFAULT_BRANCH,
+    }),
+  })
+}
+
+export async function deleteProductBySlug(slug) {
+  const filePath = 'data/products.json'
+  const file = await getRepoFile(filePath)
+  const products = JSON.parse(file.content)
+  const filtered = products.filter((product) => product.slug !== slug)
+
+  if (filtered.length === products.length) {
+    throw new Error('Product not found for deletion.')
+  }
+
+  await putRepoFile({
+    path: filePath,
+    content: JSON.stringify(filtered, null, 2),
+    message: `Delete product: ${slug}`,
+    sha: file.sha,
+  })
+
+  try {
+    await deleteRepoFile({
+      path: `public/images/${slug}.webp`,
+      message: `Delete product image: ${slug}`,
+    })
+  } catch {
+    // Ignore missing images, product record is already removed.
+  }
+}
+
 export async function uploadProductImage(slug, base64Image) {
   const imagePath = `public/images/${slug}.webp`
   let existingSha

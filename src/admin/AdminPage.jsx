@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
-import { saveProductWithImage } from '../utils/github'
+import { deleteProductBySlug, listProductsFromRepo, saveProductWithImage } from '../utils/github'
 import { fileToWebpBase64 } from '../utils/image'
 import { toSlug } from '../utils/slug'
 
@@ -17,8 +17,56 @@ function AdminPage() {
   const [previewUrl, setPreviewUrl] = useState('')
   const [status, setStatus] = useState({ type: 'info', message: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [products, setProducts] = useState([])
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true)
+  const [deletingSlug, setDeletingSlug] = useState('')
 
   const slug = useMemo(() => toSlug(form.name), [form.name])
+
+  async function fetchProducts() {
+    const items = await listProductsFromRepo()
+    return items
+  }
+
+  async function loadProducts() {
+    setIsLoadingProducts(true)
+    try {
+      const items = await fetchProducts()
+      setProducts(items)
+    } finally {
+      setIsLoadingProducts(false)
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true
+
+    async function initialLoad() {
+      try {
+        const items = await fetchProducts()
+        if (mounted) {
+          setProducts(items)
+        }
+      } catch (err) {
+        if (mounted) {
+          setStatus({
+            type: 'error',
+            message: err.message || 'Failed to load products.',
+          })
+        }
+      } finally {
+        if (mounted) {
+          setIsLoadingProducts(false)
+        }
+      }
+    }
+
+    initialLoad()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   function updateField(event) {
     const { name, value } = event.target
@@ -63,6 +111,7 @@ function AdminPage() {
       setForm(INITIAL_FORM)
       setPreviewUrl('')
       setStatus({ type: 'success', message: 'Product saved to GitHub successfully.' })
+      await loadProducts()
     } catch (err) {
       setStatus({
         type: 'error',
@@ -70,6 +119,23 @@ function AdminPage() {
       })
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function onDelete(slugToDelete) {
+    setDeletingSlug(slugToDelete)
+    setStatus({ type: 'info', message: '' })
+    try {
+      await deleteProductBySlug(slugToDelete)
+      setStatus({ type: 'success', message: 'Product deleted successfully.' })
+      await loadProducts()
+    } catch (err) {
+      setStatus({
+        type: 'error',
+        message: err.message || 'Failed to delete product.',
+      })
+    } finally {
+      setDeletingSlug('')
     }
   }
 
@@ -167,6 +233,41 @@ function AdminPage() {
       </div>
 
       <Notification type={status.type} message={status.message} />
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Manage Products</h2>
+        <p className="mt-1 text-sm text-slate-600">Delete products and their images from the repository.</p>
+
+        {isLoadingProducts ? (
+          <div className="mt-4">
+            <LoadingSpinner label="Loading products..." />
+          </div>
+        ) : products.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-500">No products found.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {products.map((product) => (
+              <div
+                key={product.slug}
+                className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3"
+              >
+                <div>
+                  <p className="font-medium text-slate-900">{product.name}</p>
+                  <p className="text-xs text-slate-500">{product.slug}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onDelete(product.slug)}
+                  disabled={deletingSlug === product.slug}
+                  className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                >
+                  {deletingSlug === product.slug ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   )
 }

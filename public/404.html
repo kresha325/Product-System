@@ -6,9 +6,8 @@
     <title>Product System</title>
     <script>
       const base = '/Product-System'
-      const destination = `${base}/?redirect=${encodeURIComponent(
-        window.location.pathname + window.location.search + window.location.hash,
-      )}`
+      const path = window.location.pathname.replace(base, '') || '/'
+      const destination = `${base}/#${path}${window.location.search}${window.location.hash}`
       window.location.replace(destination)
     </script>
   </head>
