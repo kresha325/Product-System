@@ -64,13 +64,13 @@ function encodeContent(content) {
   return btoa(binary)
 }
 
-function buildGalleryPageUrl(slug, index) {
+function buildGalleryPageUrl(businessSlug, slug, index) {
   const { owner, repo } = config()
-  return `https://${owner}.github.io/${repo}/images/${slug}/${index}.webp`
+  return `https://${owner}.github.io/${repo}/images/${businessSlug}/${slug}/${index}.webp`
 }
 
-async function deleteGalleryFolderContents(slug) {
-  const folderPath = `public/images/${slug}`
+async function deleteGalleryFolderContents(businessSlug, slug) {
+  const folderPath = `public/images/${businessSlug}/${slug}`
   try {
     const data = await githubRequest(`/contents/${folderPath}`)
     if (!Array.isArray(data)) {
@@ -95,22 +95,22 @@ async function deleteLegacySingleImage(slug) {
   }
 }
 
-export async function replaceProductGallery(slug, base64Images) {
+export async function replaceProductGallery(businessSlug, slug, base64Images) {
   if (!base64Images.length) {
     throw new Error('At least one image is required.')
   }
-  await deleteGalleryFolderContents(slug)
+  await deleteGalleryFolderContents(businessSlug, slug)
   await deleteLegacySingleImage(slug)
   const urls = []
   for (let i = 0; i < base64Images.length; i++) {
-    const path = `public/images/${slug}/${i + 1}.webp`
+    const path = `public/images/${businessSlug}/${slug}/${i + 1}.webp`
     await putRepoFile({
       path,
       content: base64Images[i],
       message: `Upload gallery ${slug} ${i + 1}`,
       contentBase64: true,
     })
-    urls.push(buildGalleryPageUrl(slug, i + 1))
+    urls.push(buildGalleryPageUrl(businessSlug, slug, i + 1))
   }
   return urls
 }
@@ -345,6 +345,7 @@ export async function deleteRepoFile({ path, message }) {
 
 export async function deleteProductBySlug(slug) {
   const products = await listProductsFromRepo()
+  const target = products.find((product) => product.slug === slug)
   const filtered = products.filter((product) => product.slug !== slug)
 
   if (filtered.length === products.length) {
@@ -353,13 +354,14 @@ export async function deleteProductBySlug(slug) {
 
   await writeProductsAndSync(filtered, `Delete product: ${slug}`)
 
-  await deleteGalleryFolderContents(slug)
+  await deleteGalleryFolderContents(getBusinessSlug(target), slug)
   await deleteLegacySingleImage(slug)
 }
 
 export async function saveProductWithImages(productInput, base64Images) {
   const slug = productInput.slug
-  const urls = await replaceProductGallery(slug, base64Images)
+  const businessSlug = productInput.businessSlug || 'default'
+  const urls = await replaceProductGallery(businessSlug, slug, base64Images)
   await appendProduct({
     name: productInput.name,
     slug,
@@ -373,13 +375,20 @@ export async function saveProductWithImages(productInput, base64Images) {
 }
 
 export async function updateProductWithImages(slug, fields, base64Images) {
-  const urls = await replaceProductGallery(slug, base64Images)
   const products = await listProductsFromRepo()
   const idx = products.findIndex((product) => product.slug === slug)
 
   if (idx === -1) {
     throw new Error('Product not found.')
   }
+  const previousBusinessSlug = getBusinessSlug(products[idx])
+  const nextBusinessSlug = fields.businessSlug || previousBusinessSlug
+
+  if (previousBusinessSlug !== nextBusinessSlug) {
+    await deleteGalleryFolderContents(previousBusinessSlug, slug)
+  }
+
+  const urls = await replaceProductGallery(nextBusinessSlug, slug, base64Images)
 
   products[idx] = {
     ...products[idx],
