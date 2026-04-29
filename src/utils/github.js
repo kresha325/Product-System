@@ -1,18 +1,30 @@
 const API_BASE = 'https://api.github.com'
 const DEFAULT_BRANCH = 'main'
+const DEFAULT_OWNER = 'kresha325'
+const DEFAULT_REPO = 'Product-System'
 
-function env(name) {
+function env(name, fallback = '') {
   const value = import.meta.env[name]
-  if (!value) {
+  if (!value && !fallback) {
     throw new Error(`Missing required environment variable: ${name}`)
   }
-  return value
+  return value || fallback
 }
 
 function config({ requireToken = true } = {}) {
-  const owner = env('VITE_GITHUB_OWNER')
-  const repo = env('VITE_GITHUB_REPO')
-  const token = requireToken ? env('VITE_GITHUB_TOKEN') : import.meta.env.VITE_GITHUB_TOKEN
+  const owner = env('VITE_GITHUB_OWNER', DEFAULT_OWNER)
+  const repo = env('VITE_GITHUB_REPO', DEFAULT_REPO)
+  const token = requireToken
+    ? env(
+        'VITE_GITHUB_TOKEN',
+        '',
+      )
+    : import.meta.env.VITE_GITHUB_TOKEN
+  if (requireToken && !token) {
+    throw new Error(
+      'Missing VITE_GITHUB_TOKEN. Vendose ne .env (lokal) ose te GitHub Actions Secrets (deploy).',
+    )
+  }
   return { owner, repo, token }
 }
 
@@ -112,10 +124,7 @@ export async function saveProductWithImage(productInput, imageBase64) {
 }
 
 export function getProductsDataUrl() {
-  const owner = import.meta.env.VITE_GITHUB_OWNER
-  const repo = import.meta.env.VITE_GITHUB_REPO
-  if (!owner || !repo) {
-    return `${import.meta.env.BASE_URL}data/products.json`
-  }
+  const owner = import.meta.env.VITE_GITHUB_OWNER || DEFAULT_OWNER
+  const repo = import.meta.env.VITE_GITHUB_REPO || DEFAULT_REPO
   return `https://raw.githubusercontent.com/${owner}/${repo}/${DEFAULT_BRANCH}/data/products.json`
 }
