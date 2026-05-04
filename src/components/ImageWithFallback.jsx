@@ -1,17 +1,31 @@
-import { useState } from 'react'
+import { imageUrlWithCacheBust } from '../utils/product'
 
 const FALLBACK_IMAGE = `${import.meta.env.BASE_URL}images/fallback.svg`
 
-function ImageWithFallback({ src, alt, className = 'h-full w-full object-cover', loading = 'lazy' }) {
-  const [imageSrc, setImageSrc] = useState(src || FALLBACK_IMAGE)
+function ImageWithFallback({
+  src,
+  alt,
+  className = 'h-full w-full object-cover',
+  loading = 'lazy',
+  cacheKey,
+}) {
+  const busted = imageUrlWithCacheBust(src, cacheKey)
+  const displaySrc = busted || FALLBACK_IMAGE
 
   return (
     <img
-      src={imageSrc}
+      key={displaySrc}
+      src={displaySrc}
       alt={alt}
       className={className}
       loading={loading}
-      onError={() => setImageSrc(FALLBACK_IMAGE)}
+      onError={(e) => {
+        if (e.currentTarget.src.endsWith('fallback.svg')) {
+          return
+        }
+        e.currentTarget.onerror = null
+        e.currentTarget.src = FALLBACK_IMAGE
+      }}
     />
   )
 }

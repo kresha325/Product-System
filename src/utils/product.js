@@ -21,3 +21,33 @@ export function getProductImages(product) {
   }
   return []
 }
+
+/** Changes when product metadata/images update — used to bust browser/CDN cache on stable asset URLs. */
+export function getImageCacheKey(product) {
+  if (!product) {
+    return ''
+  }
+  if (product.updatedAt) {
+    return String(product.updatedAt)
+  }
+  const imgs = getProductImages(product)
+  return `${product.slug}:${imgs.join('|')}`.slice(0, 512)
+}
+
+export function imageUrlWithCacheBust(url, cacheKey) {
+  if (!url) {
+    return ''
+  }
+  if (!cacheKey) {
+    return url
+  }
+  if (url.startsWith('blob:') || url.startsWith('data:')) {
+    return url
+  }
+  const lower = url.toLowerCase()
+  if (lower.includes('fallback.svg')) {
+    return url
+  }
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}v=${encodeURIComponent(cacheKey)}`
+}

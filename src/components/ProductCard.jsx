@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import ImageWithFallback from './ImageWithFallback'
-import { getBusinessSlug, getProductImages } from '../utils/product'
+import { getBusinessSlug, getImageCacheKey, getProductImages } from '../utils/product'
 
 function ProductCard({
   product,
@@ -9,12 +9,13 @@ function ProductCard({
   deletingSlug = '',
 }) {
   const cover = getProductImages(product)[0]
+  const imageCacheKey = getImageCacheKey(product)
 
   return (
     <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <Link to={`/product/${product.slug}`} className="block">
         <div className="aspect-video bg-slate-100">
-          <ImageWithFallback src={cover} alt={product.name} />
+          <ImageWithFallback src={cover} alt={product.name} cacheKey={imageCacheKey} />
         </div>
         <div className="space-y-2 p-4">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">

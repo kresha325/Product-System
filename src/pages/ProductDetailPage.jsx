@@ -6,7 +6,7 @@ import Notification from '../components/Notification'
 import { CATALOG_CHANGED_EVENT } from '../utils/catalogEvents'
 import { getBusinessesDataUrl, getProductsDataUrl } from '../utils/github'
 import { getCurrentAdmin, isAdminSession } from '../utils/adminSession'
-import { getBusinessSlug, getProductImages } from '../utils/product'
+import { getBusinessSlug, getImageCacheKey, getProductImages } from '../utils/product'
 import { PRODUCT_OPTIONAL_FIELD_MAP } from '../utils/productFields'
 
 function ProductDetailPage() {
@@ -161,6 +161,7 @@ function ProductDetailPage() {
                 src={src}
                 alt={`${product.name} ${index + 1}`}
                 loading={index === 0 ? 'eager' : 'lazy'}
+                cacheKey={`${getImageCacheKey(product)}-${index}`}
               />
             </div>
           ))}

@@ -354,7 +354,10 @@ async function writeProductsAndSync(products, message) {
 
 export async function appendProduct(product) {
   const products = await listProductsFromRepo()
-  products.push(product)
+  products.push({
+    ...product,
+    updatedAt: new Date().toISOString(),
+  })
   await writeProductsAndSync(products, `Add product: ${product.name}`)
 }
 
@@ -416,6 +419,7 @@ export async function mergeImportedProducts(rows, actor) {
       description: String(raw.description || '').trim(),
       details: raw.details && typeof raw.details === 'object' ? raw.details : {},
       images,
+      updatedAt: raw.updatedAt || new Date().toISOString(),
     })
     existingSlugs.add(slug)
     added += 1
@@ -642,6 +646,7 @@ export async function updateProductWithImages(slug, fields, base64Images) {
     ...fields,
     slug,
     images: urls,
+    updatedAt: new Date().toISOString(),
   }
   delete products[idx].image
 

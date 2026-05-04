@@ -13,7 +13,12 @@ import {
 import { fetchUrlAsWebpBase64, fileToWebpBase64 } from '../utils/image'
 import { dispatchCatalogChanged } from '../utils/catalogEvents'
 import { getCurrentAdmin } from '../utils/adminSession'
-import { DEFAULT_BUSINESS_SLUG, getBusinessSlug, getProductImages } from '../utils/product'
+import {
+  DEFAULT_BUSINESS_SLUG,
+  getBusinessSlug,
+  getProductImages,
+  imageUrlWithCacheBust,
+} from '../utils/product'
 import { PRODUCT_OPTIONAL_FIELD_MAP } from '../utils/productFields'
 import { toSlug } from '../utils/slug'
 
@@ -177,11 +182,13 @@ function AdminPage() {
           details: found.details && typeof found.details === 'object' ? found.details : {},
         })
         const imgs = getProductImages(found)
+        const bustKey = found.updatedAt || found.slug
         setGalleryItems(
           imgs.map((url) => ({
             id: makeId(),
             kind: 'existing',
             url,
+            imageCacheKey: bustKey,
           })),
         )
       } catch (err) {
@@ -697,7 +704,11 @@ function AdminPage() {
                     }`}
                   >
                     <img
-                      src={item.kind === 'pending' ? item.preview : item.url}
+                      src={
+                        item.kind === 'pending'
+                          ? item.preview
+                          : imageUrlWithCacheBust(item.url, item.imageCacheKey)
+                      }
                       alt=""
                       className="aspect-square w-full object-cover"
                       draggable={false}
