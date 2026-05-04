@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
@@ -6,6 +6,7 @@ import {
   deleteProductBySlug,
   listBusinessesFromRepo,
   listProductsFromRepo,
+  mergeImportedProducts,
   saveProductWithImages,
   updateProductWithImages,
 } from '../utils/github'
@@ -27,6 +28,9 @@ function makeId() {
   return `g-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 }
 
+const MAX_GALLERY_ITEMS = 24
+const MAX_IMAGE_FILE_BYTES = 12 * 1024 * 1024
+
 function AdminPage() {
   const navigate = useNavigate()
   const { slug: editSlugParam } = useParams()
@@ -40,6 +44,9 @@ function AdminPage() {
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [deletingSlug, setDeletingSlug] = useState('')
   const [isDraggingImages, setIsDraggingImages] = useState(false)
+  const [galleryDragId, setGalleryDragId] = useState(null)
+  const [importing, setImporting] = useState(false)
+  const importInputRef = useRef(null)
   const currentAdmin = useMemo(() => getCurrentAdmin(), [])
 
   const derivedSlug = useMemo(() => toSlug(form.name), [form.name])
@@ -244,18 +251,48 @@ function AdminPage() {
   }
 
   function appendFiles(files) {
-    if (!files.length) {
+    const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith('image/'))
+    if (!imageFiles.length) {
       return
     }
-    setGalleryItems((prev) => [
-      ...prev,
-      ...files.map((file) => ({
-        id: makeId(),
-        kind: 'pending',
-        file,
-        preview: URL.createObjectURL(file),
-      })),
-    ])
+    const oversized = imageFiles.filter((file) => file.size > MAX_IMAGE_FILE_BYTES)
+    if (oversized.length > 0) {
+      setStatus({
+        type: 'error',
+        message: `Some images exceed ${Math.round(MAX_IMAGE_FILE_BYTES / (1024 * 1024))}MB each.`,
+      })
+      return
+    }
+    setGalleryItems((prev) => {
+      const room = MAX_GALLERY_ITEMS - prev.length
+      if (room <= 0) {
+        requestAnimationFrame(() =>
+          setStatus({
+            type: 'error',
+            message: `Maximum ${MAX_GALLERY_ITEMS} images per product.`,
+          }),
+        )
+        return prev
+      }
+      const slice = imageFiles.slice(0, room)
+      if (slice.length < imageFiles.length) {
+        requestAnimationFrame(() =>
+          setStatus({
+            type: 'info',
+            message: `Added ${slice.length} image(s); limit is ${MAX_GALLERY_ITEMS} total.`,
+          }),
+        )
+      }
+      return [
+        ...prev,
+        ...slice.map((file) => ({
+          id: makeId(),
+          kind: 'pending',
+          file,
+          preview: URL.createObjectURL(file),
+        })),
+      ]
+    })
   }
 
   function addFiles(event) {
@@ -301,6 +338,66 @@ function AdminPage() {
     })
   }
 
+  function reorderGalleryDrop(targetId) {
+    if (!galleryDragId || galleryDragId === targetId) {
+      setGalleryDragId(null)
+      return
+    }
+    setGalleryItems((prev) => {
+      const from = prev.findIndex((entry) => entry.id === galleryDragId)
+      const to = prev.findIndex((entry) => entry.id === targetId)
+      if (from < 0 || to < 0) {
+        return prev
+      }
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+    setGalleryDragId(null)
+  }
+
+  function exportProductsJson() {
+    const blob = new Blob([JSON.stringify(products, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `products-export-${Date.now()}.json`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function onImportProductsFile(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !currentAdmin) {
+      return
+    }
+    setImporting(true)
+    setStatus({ type: 'info', message: '' })
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+      const rows = Array.isArray(data) ? data : data?.products
+      if (!Array.isArray(rows)) {
+        throw new Error('JSON must be an array of products or an object with a "products" array.')
+      }
+      const { added } = await mergeImportedProducts(rows, currentAdmin)
+      setStatus({
+        type: 'success',
+        message: `Import complete: ${added} new product(s) added (duplicates and other businesses skipped).`,
+      })
+      await loadProducts()
+    } catch (err) {
+      setStatus({
+        type: 'error',
+        message: err.message || 'Import failed.',
+      })
+    } finally {
+      setImporting(false)
+    }
+  }
+
   async function buildBase64Gallery() {
     const result = []
     for (const item of galleryItems) {
@@ -328,6 +425,10 @@ function AdminPage() {
 
     if (!galleryItems.length) {
       setStatus({ type: 'error', message: 'Please add at least one image.' })
+      return
+    }
+    if (galleryItems.length > MAX_GALLERY_ITEMS) {
+      setStatus({ type: 'error', message: `Too many images (max ${MAX_GALLERY_ITEMS}).` })
       return
     }
 
@@ -570,17 +671,32 @@ function AdminPage() {
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-slate-700"
               />
               <p className="mt-2 text-xs text-slate-500">
-                Drag & drop images here, or click to select multiple files.
+                Drag & drop images here, or click to select multiple files. Max {MAX_GALLERY_ITEMS} images, up to{' '}
+                {Math.round(MAX_IMAGE_FILE_BYTES / (1024 * 1024))}MB each (before WebP).
               </p>
             </div>
             {galleryItems.length > 0 && (
+              <p className="text-xs text-slate-500">Drag thumbnails to change image order.</p>
+            )}
+            {galleryItems.length > 0 && (
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {galleryItems.map((item) => (
-                  <div key={item.id} className="relative overflow-hidden rounded-lg border border-slate-200">
+                  <div
+                    key={item.id}
+                    draggable
+                    onDragStart={() => setGalleryDragId(item.id)}
+                    onDragEnd={() => setGalleryDragId(null)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => reorderGalleryDrop(item.id)}
+                    className={`relative cursor-grab overflow-hidden rounded-lg border active:cursor-grabbing ${
+                      galleryDragId === item.id ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200'
+                    }`}
+                  >
                     <img
                       src={item.kind === 'pending' ? item.preview : item.url}
                       alt=""
                       className="aspect-square w-full object-cover"
+                      draggable={false}
                     />
                     <button
                       type="button"
@@ -617,6 +733,36 @@ function AdminPage() {
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Manage Products</h2>
         <p className="mt-1 text-sm text-slate-600">Edit or delete products in the repository.</p>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={exportProductsJson}
+            disabled={products.length === 0 || isLoadingProducts}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Export JSON (visible list)
+          </button>
+          <button
+            type="button"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing || !currentAdmin}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {importing ? 'Importing…' : 'Import JSON'}
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={onImportProductsFile}
+          />
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          Import expects <span className="font-mono">products[]</span> with slug, name, businessSlug, category,
+          description; skips duplicates and businesses you cannot manage.
+        </p>
 
         {isLoadingProducts ? (
           <div className="mt-4">

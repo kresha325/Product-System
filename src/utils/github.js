@@ -4,6 +4,10 @@ const API_BASE = 'https://api.github.com'
 const DEFAULT_BRANCH = 'main'
 const DEFAULT_OWNER = 'kresha325'
 const DEFAULT_REPO = 'Product-System'
+/** Version for generated API JSON payloads (bump when shape changes). */
+export const API_SCHEMA_VERSION = 1
+const AUDIT_PATH = 'data/audit.json'
+const MAX_AUDIT_ENTRIES = 150
 
 function env(name, fallback = '') {
   const value = import.meta.env[name]
@@ -169,6 +173,26 @@ async function putJsonFile(path, data, message) {
   })
 }
 
+async function appendAudit(entry) {
+  let list = []
+  try {
+    const file = await getRepoFile(AUDIT_PATH)
+    const parsed = JSON.parse(file.content)
+    if (Array.isArray(parsed)) {
+      list = parsed
+    }
+  } catch {
+    // First run or missing file.
+  }
+  list.unshift({
+    at: new Date().toISOString(),
+    schemaVersion: API_SCHEMA_VERSION,
+    ...entry,
+  })
+  list = list.slice(0, MAX_AUDIT_ENTRIES)
+  await putJsonFile(AUDIT_PATH, list, `Audit: ${entry.action || 'event'}`)
+}
+
 async function deleteStaleCategoryApiFiles(businessSlug, categoryNames) {
   const expectedSlugs = new Set(categoryNames.map((name) => toCategorySlug(name)))
   const folderPath = `public/api/${businessSlug}/category`
@@ -216,6 +240,7 @@ async function deleteCategoryApiFolder(businessSlug) {
 
 async function syncBusinessApiArtifacts(products, businesses) {
   const bundlePayload = {
+    schemaVersion: API_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     businesses: businesses.map((business) => ({
       slug: business.slug,
@@ -235,6 +260,7 @@ async function syncBusinessApiArtifacts(products, businesses) {
     )
     await deleteStaleCategoryApiFiles(business.slug, categories)
     const payload = {
+      schemaVersion: API_SCHEMA_VERSION,
       generatedAt: new Date().toISOString(),
       business: {
         slug: business.slug,
@@ -264,6 +290,7 @@ async function syncBusinessApiArtifacts(products, businesses) {
       await putJsonFile(
         `public/api/${business.slug}/category/${categorySlug}.json`,
         {
+          schemaVersion: API_SCHEMA_VERSION,
           generatedAt: new Date().toISOString(),
           business: {
             slug: business.slug,
@@ -278,6 +305,33 @@ async function syncBusinessApiArtifacts(products, businesses) {
         `Sync category API ${business.slug}/${categorySlug}`,
       )
     }
+
+    const indexPayload = {
+      schemaVersion: API_SCHEMA_VERSION,
+      generatedAt: new Date().toISOString(),
+      business: {
+        slug: business.slug,
+        name: business.name,
+      },
+      endpoints: {
+        bundleUrl: getRawRepoUrl(`public/api/${business.slug}.json`),
+        productsUrl: getRawRepoUrl(`public/business/${business.slug}/products.json`),
+        businessesIndexUrl: getRawRepoUrl('public/api/businesses.json'),
+        categories: categories.map((categoryName) => {
+          const categorySlug = toCategorySlug(categoryName)
+          return {
+            name: categoryName,
+            slug: categorySlug,
+            url: getRawRepoUrl(`public/api/${business.slug}/category/${categorySlug}.json`),
+          }
+        }),
+      },
+    }
+    await putJsonFile(
+      `public/api/${business.slug}/index.json`,
+      indexPayload,
+      `Sync API index ${business.slug}`,
+    )
   }
 }
 
@@ -288,6 +342,11 @@ async function writeProductsAndSync(products, message) {
     content: JSON.stringify(products, null, 2),
     message,
     sha: file.sha,
+  })
+  await appendAudit({
+    action: 'products_write',
+    commitMessage: message,
+    productCount: products.length,
   })
   const businesses = await listBusinessesFromRepo()
   await syncBusinessApiArtifacts(products, businesses)
@@ -303,6 +362,66 @@ export async function listProductsFromRepo() {
   const file = await getRepoFile('data/products.json')
   const products = JSON.parse(file.content)
   return Array.isArray(products) ? products : []
+}
+
+/**
+ * Merge new product rows from JSON import. Skips slugs that already exist or businesses the actor cannot access.
+ */
+export async function mergeImportedProducts(rows, actor) {
+  if (!actor) {
+    throw new Error('Not authenticated.')
+  }
+  if (!Array.isArray(rows)) {
+    throw new Error('Import file must contain a JSON array of products.')
+  }
+  const businesses = await listBusinessesFromRepo()
+  const allowedSlugs = new Set(
+    actor.role === 'super_admin'
+      ? businesses.map((b) => b.slug)
+      : businesses.filter((b) => b.createdBy === actor.username).map((b) => b.slug),
+  )
+  const existing = await listProductsFromRepo()
+  const existingSlugs = new Set(existing.map((p) => p.slug))
+  const merged = [...existing]
+  let added = 0
+  for (const raw of rows) {
+    if (!raw || typeof raw !== 'object') {
+      continue
+    }
+    const slug = String(raw.slug || '').trim()
+    const name = String(raw.name || '').trim()
+    if (!slug || !name) {
+      continue
+    }
+    if (existingSlugs.has(slug)) {
+      continue
+    }
+    const businessSlug = raw.businessSlug ? String(raw.businessSlug).trim() : getBusinessSlug(raw)
+    if (!allowedSlugs.has(businessSlug)) {
+      continue
+    }
+    const biz = businesses.find((b) => b.slug === businessSlug)
+    const images =
+      Array.isArray(raw.images) && raw.images.length > 0
+        ? raw.images
+        : raw.image
+          ? [raw.image]
+          : []
+    merged.push({
+      name,
+      slug,
+      businessSlug,
+      businessName: raw.businessName || biz?.name || businessSlug,
+      category: String(raw.category || 'General').trim(),
+      description: String(raw.description || '').trim(),
+      details: raw.details && typeof raw.details === 'object' ? raw.details : {},
+      images,
+    })
+    existingSlugs.add(slug)
+    added += 1
+  }
+  await writeProductsAndSync(merged, `Bulk import products (+${added})`)
+  return { added, total: merged.length }
 }
 
 export async function listBusinessesFromRepo() {
@@ -341,6 +460,11 @@ async function writeBusinessesAndSync(businesses, message) {
     content: JSON.stringify(businesses, null, 2),
     message,
     sha,
+  })
+  await appendAudit({
+    action: 'businesses_write',
+    commitMessage: message,
+    businessCount: businesses.length,
   })
   const products = await listProductsFromRepo()
   await syncBusinessApiArtifacts(products, businesses)
@@ -436,6 +560,14 @@ export async function deleteBusiness(slug, actor) {
     // Missing file is fine.
   }
   await deleteCategoryApiFolder(slug)
+  try {
+    await deleteRepoFile({
+      path: `public/api/${slug}/index.json`,
+      message: `Remove API index for ${slug}`,
+    })
+  } catch {
+    // Missing file is fine.
+  }
   try {
     await deleteRepoFile({
       path: `public/business/${slug}/products.json`,
@@ -536,4 +668,8 @@ export function getBusinessApiBundleUrl(businessSlug) {
 
 export function getBusinessCategoryApiUrl(businessSlug, categorySlug) {
   return getRawRepoUrl(`public/api/${businessSlug}/category/${categorySlug}.json`)
+}
+
+export function getBusinessIndexUrl(businessSlug) {
+  return getRawRepoUrl(`public/api/${businessSlug}/index.json`)
 }

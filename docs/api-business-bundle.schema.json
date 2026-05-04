@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/product-system/api-business-bundle.schema.json",
+  "title": "Product System business API bundle",
+  "type": "object",
+  "required": ["schemaVersion", "generatedAt", "business", "products"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "categories": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "business": {
+      "type": "object",
+      "required": ["slug", "name"],
+      "properties": {
+        "slug": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "enabledFields": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["slug", "name"],
+        "properties": {
+          "slug": { "type": "string" },
+          "name": { "type": "string" },
+          "category": { "type": "string" },
+          "description": { "type": "string" },
+          "businessSlug": { "type": "string" },
+          "businessName": { "type": "string" },
+          "images": {
+            "type": "array",
+            "items": { "type": "string", "format": "uri" }
+          },
+          "details": { "type": "object" }
+        }
+      }
+    }
+  }
+}

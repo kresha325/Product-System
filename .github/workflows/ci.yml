@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_GITHUB_OWNER: kresha325
+          VITE_GITHUB_REPO: Product-System
+          VITE_SUPERADMIN_USERNAME: ci
+          VITE_SUPERADMIN_PASSWORD: ci
+          VITE_ADMIN_CREDENTIALS: ci:ci
+          VITE_GITHUB_TOKEN: ""

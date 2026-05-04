@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react'
 import ImageWithFallback from '../components/ImageWithFallback'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
-import { getProductsDataUrl } from '../utils/github'
-import { isAdminSession } from '../utils/adminSession'
+import { getBusinessesDataUrl, getProductsDataUrl } from '../utils/github'
+import { getCurrentAdmin, isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug, getProductImages } from '../utils/product'
 import { PRODUCT_OPTIONAL_FIELD_MAP } from '../utils/productFields'
 
@@ -13,6 +13,7 @@ function ProductDetailPage() {
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [canEditProduct, setCanEditProduct] = useState(false)
 
   useEffect(() => {
     async function loadProduct() {
@@ -31,6 +32,25 @@ function ProductDetailPage() {
           throw new Error('Product not found.')
         }
         setProduct(item)
+
+        let allowEdit = false
+        if (isAdminSession()) {
+          const admin = getCurrentAdmin()
+          if (admin?.role === 'super_admin') {
+            allowEdit = true
+          } else {
+            const bizUrl = new URL(getBusinessesDataUrl())
+            bizUrl.searchParams.set('t', Date.now().toString())
+            const bizRes = await fetch(bizUrl.toString(), { cache: 'no-store' })
+            if (bizRes.ok) {
+              const list = await bizRes.json()
+              const bslug = getBusinessSlug(item)
+              const biz = Array.isArray(list) ? list.find((b) => b.slug === bslug) : null
+              allowEdit = Boolean(biz && biz.createdBy === admin?.username)
+            }
+          }
+        }
+        setCanEditProduct(allowEdit)
       } catch (err) {
         setError(err.message)
       } finally {
@@ -48,7 +68,7 @@ function ProductDetailPage() {
     return <Notification type="error" message={error} />
   }
 
-  const showAdminEdit = isAdminSession()
+  const showAdminEdit = canEditProduct
   const detailEntries = Object.entries(product.details || {}).filter(([, value]) => {
     if (Array.isArray(value)) {
       return value.length > 0
