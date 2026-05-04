@@ -659,11 +659,7 @@ export function getRawRepoUrl(filePath) {
   return `https://raw.githubusercontent.com/${owner}/${repo}/${DEFAULT_BRANCH}/${filePath}`
 }
 
-/**
- * Use with fetch() for JSON on raw.githubusercontent.com. Avoid Cache-Control / Pragma request headers —
- * they trigger a CORS preflight OPTIONS call that GitHub raw does not answer with permissive ACAO headers.
- */
-export const RAW_REPO_FETCH_INIT = Object.freeze({ cache: 'no-store' })
+/** Plain cross-origin GET works (ACAO *); OPTIONS preflight gets HTTP 403 from raw.githubusercontent.com, so use `fetch(url)` with no init options that trigger preflight (e.g. avoid `cache: 'no-store'`). */
 
 export function getProductsDataUrl() {
   return getRawRepoUrl('data/products.json')

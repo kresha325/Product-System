@@ -4,12 +4,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import ProductCard from '../components/ProductCard'
 import { CATALOG_CHANGED_EVENT, dispatchCatalogChanged } from '../utils/catalogEvents'
-import {
-  RAW_REPO_FETCH_INIT,
-  deleteProductBySlug,
-  getBusinessesDataUrl,
-  getProductsDataUrl,
-} from '../utils/github'
+import { deleteProductBySlug, getBusinessesDataUrl, getProductsDataUrl } from '../utils/github'
 import { getCurrentAdmin, isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug } from '../utils/product'
 
@@ -34,7 +29,7 @@ function ProductsPage() {
   const selectedBusinessSlug = routeBusinessSlug || searchParams.get('business') || ''
 
   const reloadProducts = useCallback(async () => {
-    const response = await fetch(cacheBustedUrl(getProductsDataUrl()), RAW_REPO_FETCH_INIT)
+    const response = await fetch(cacheBustedUrl(getProductsDataUrl()))
     if (!response.ok) {
       throw new Error('Unable to fetch products list.')
     }
@@ -44,7 +39,7 @@ function ProductsPage() {
 
   const reloadBusinesses = useCallback(async () => {
     try {
-      const response = await fetch(cacheBustedUrl(getBusinessesDataUrl()), RAW_REPO_FETCH_INIT)
+      const response = await fetch(cacheBustedUrl(getBusinessesDataUrl()))
       if (!response.ok || response.status === 404) {
         setBusinesses([])
         return

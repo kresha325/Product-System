@@ -16,7 +16,7 @@ function BusinessesPage() {
       try {
         const url = new URL(getBusinessesDataUrl())
         url.searchParams.set('t', Date.now().toString())
-        const response = await fetch(url.toString(), { cache: 'no-store' })
+        const response = await fetch(url.toString())
         if (response.status === 404) {
           setBusinesses([])
           return
