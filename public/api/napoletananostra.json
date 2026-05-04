@@ -1,12 +1,28 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-05-04T09:57:49.689Z",
+  "generatedAt": "2026-05-04T20:37:25.315Z",
   "business": {
     "slug": "napoletananostra",
     "name": "NapoletanaNostra",
     "description": "",
     "enabledFields": []
   },
-  "categories": [],
-  "products": []
+  "categories": [
+    "stake"
+  ],
+  "products": [
+    {
+      "name": "Filet Mignon",
+      "slug": "filet-mignon",
+      "businessSlug": "napoletananostra",
+      "businessName": "NapoletanaNostra",
+      "category": "stake",
+      "description": "Demiglas sous, perime,",
+      "details": {},
+      "images": [
+        "https://kresha325.github.io/Product-System/images/napoletananostra/filet-mignon/1.webp"
+      ],
+      "updatedAt": "2026-05-04T20:37:13.430Z"
+    }
+  ]
 }
