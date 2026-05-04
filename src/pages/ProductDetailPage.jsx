@@ -4,7 +4,7 @@ import ImageWithFallback from '../components/ImageWithFallback'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import { CATALOG_CHANGED_EVENT } from '../utils/catalogEvents'
-import { getBusinessesDataUrl, getProductsDataUrl } from '../utils/github'
+import { RAW_REPO_FETCH_INIT, getBusinessesDataUrl, getProductsDataUrl } from '../utils/github'
 import { getCurrentAdmin, isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug, getImageCacheKey, getProductImages } from '../utils/product'
 import { PRODUCT_OPTIONAL_FIELD_MAP } from '../utils/productFields'
@@ -23,10 +23,7 @@ function ProductDetailPage() {
       try {
         const url = new URL(getProductsDataUrl())
         url.searchParams.set('cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-        const response = await fetch(url.toString(), {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
-        })
+        const response = await fetch(url.toString(), RAW_REPO_FETCH_INIT)
         if (!response.ok) {
           throw new Error('Unable to fetch product data.')
         }
@@ -45,10 +42,7 @@ function ProductDetailPage() {
           } else {
             const bizUrl = new URL(getBusinessesDataUrl())
             bizUrl.searchParams.set('cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-            const bizRes = await fetch(bizUrl.toString(), {
-              cache: 'no-store',
-              headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
-            })
+            const bizRes = await fetch(bizUrl.toString(), RAW_REPO_FETCH_INIT)
             if (bizRes.ok) {
               const list = await bizRes.json()
               const bslug = getBusinessSlug(item)
@@ -76,10 +70,7 @@ function ProductDetailPage() {
         try {
           const url = new URL(getProductsDataUrl())
           url.searchParams.set('cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-          const response = await fetch(url.toString(), {
-            cache: 'no-store',
-            headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
-          })
+          const response = await fetch(url.toString(), RAW_REPO_FETCH_INIT)
           if (!response.ok) {
             return
           }
@@ -98,10 +89,7 @@ function ProductDetailPage() {
             } else {
               const bizUrl = new URL(getBusinessesDataUrl())
               bizUrl.searchParams.set('cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-              const bizRes = await fetch(bizUrl.toString(), {
-                cache: 'no-store',
-                headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
-              })
+              const bizRes = await fetch(bizUrl.toString(), RAW_REPO_FETCH_INIT)
               if (bizRes.ok) {
                 const list = await bizRes.json()
                 const bslug = getBusinessSlug(item)
