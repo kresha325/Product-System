@@ -4,7 +4,7 @@ import ImageWithFallback from '../components/ImageWithFallback'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import { CATALOG_CHANGED_EVENT } from '../utils/catalogEvents'
-import { fetchPublicRepoJson } from '../utils/github'
+import { fetchCatalogBusinessesList, fetchCatalogProductsList } from '../utils/github'
 import { getCurrentAdmin, isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug, getImageCacheKey, getProductImages } from '../utils/product'
 import { PRODUCT_OPTIONAL_FIELD_MAP } from '../utils/productFields'
@@ -17,7 +17,7 @@ async function computeCanEditProduct(item) {
   if (admin?.role === 'super_admin') {
     return true
   }
-  const list = await fetchPublicRepoJson('data/businesses.json')
+  const list = await fetchCatalogBusinessesList()
   if (!Array.isArray(list)) {
     return false
   }
@@ -38,7 +38,7 @@ function ProductDetailPage() {
       setLoading(true)
       setError('')
       try {
-        const data = await fetchPublicRepoJson('data/products.json')
+        const data = await fetchCatalogProductsList()
         if (!Array.isArray(data)) {
           throw new Error('Unable to fetch product data.')
         }
@@ -64,7 +64,7 @@ function ProductDetailPage() {
       }
       async function silentReload() {
         try {
-          const data = await fetchPublicRepoJson('data/products.json')
+          const data = await fetchCatalogProductsList()
           if (!Array.isArray(data)) {
             return
           }

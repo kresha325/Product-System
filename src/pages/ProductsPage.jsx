@@ -4,7 +4,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import ProductCard from '../components/ProductCard'
 import { CATALOG_CHANGED_EVENT, dispatchCatalogChanged } from '../utils/catalogEvents'
-import { deleteProductBySlug, fetchPublicRepoJson } from '../utils/github'
+import { deleteProductBySlug, fetchCatalogBusinessesList, fetchCatalogProductsList } from '../utils/github'
 import { getCurrentAdmin, isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug } from '../utils/product'
 
@@ -23,17 +23,13 @@ function ProductsPage() {
   const selectedBusinessSlug = routeBusinessSlug || searchParams.get('business') || ''
 
   const reloadProducts = useCallback(async () => {
-    const data = await fetchPublicRepoJson('data/products.json')
-    if (!Array.isArray(data)) {
-      throw new Error('Unable to fetch products list.')
-    }
+    const data = await fetchCatalogProductsList()
     setProducts(data)
   }, [])
 
   const reloadBusinesses = useCallback(async () => {
     try {
-      const list = await fetchPublicRepoJson('data/businesses.json')
-      setBusinesses(Array.isArray(list) ? list : [])
+      setBusinesses(await fetchCatalogBusinessesList())
     } catch {
       setBusinesses([])
     }

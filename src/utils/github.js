@@ -698,6 +698,46 @@ export async function fetchPublicRepoJson(repoRelativePath) {
   return JSON.parse(text)
 }
 
+async function fetchSameOriginCatalogJson(filename) {
+  try {
+    const base = import.meta.env.BASE_URL || '/'
+    const root = base.endsWith('/') ? base : `${base}/`
+    const res = await fetch(`${root}data/${filename}?t=${Date.now()}`)
+    if (!res.ok) {
+      return null
+    }
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+/** Prefer JSON copied into `dist/data/` at build time (same origin on Pages); fallback Contents API. */
+export async function fetchCatalogProductsList() {
+  const embedded = await fetchSameOriginCatalogJson('products.json')
+  if (Array.isArray(embedded)) {
+    return embedded
+  }
+  const api = await fetchPublicRepoJson('data/products.json')
+  if (!Array.isArray(api)) {
+    throw new Error('Unable to fetch products list.')
+  }
+  return api
+}
+
+export async function fetchCatalogBusinessesList() {
+  const embedded = await fetchSameOriginCatalogJson('businesses.json')
+  if (Array.isArray(embedded)) {
+    return embedded
+  }
+  try {
+    const api = await fetchPublicRepoJson('data/businesses.json')
+    return Array.isArray(api) ? api : []
+  } catch {
+    return []
+  }
+}
+
 export function getProductsDataUrl() {
   return getRawRepoUrl('data/products.json')
 }
