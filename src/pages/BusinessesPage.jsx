@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
-import { getBusinessesDataUrl } from '../utils/github'
+import { fetchPublicRepoJson } from '../utils/github'
 
 function BusinessesPage() {
   const [businesses, setBusinesses] = useState([])
@@ -14,18 +14,15 @@ function BusinessesPage() {
       setLoading(true)
       setError('')
       try {
-        const url = new URL(getBusinessesDataUrl())
-        url.searchParams.set('t', Date.now().toString())
-        const response = await fetch(url.toString())
-        if (response.status === 404) {
+        const data = await fetchPublicRepoJson('data/businesses.json')
+        if (data === null) {
           setBusinesses([])
           return
         }
-        if (!response.ok) {
+        if (!Array.isArray(data)) {
           throw new Error('Unable to fetch businesses.')
         }
-        const data = await response.json()
-        setBusinesses(Array.isArray(data) ? data : [])
+        setBusinesses(data)
       } catch (err) {
         setError(err.message)
       } finally {

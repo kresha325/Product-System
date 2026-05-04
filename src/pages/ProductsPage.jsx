@@ -4,15 +4,9 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import ProductCard from '../components/ProductCard'
 import { CATALOG_CHANGED_EVENT, dispatchCatalogChanged } from '../utils/catalogEvents'
-import { deleteProductBySlug, getBusinessesDataUrl, getProductsDataUrl } from '../utils/github'
+import { deleteProductBySlug, fetchPublicRepoJson } from '../utils/github'
 import { getCurrentAdmin, isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug } from '../utils/product'
-
-function cacheBustedUrl(rawUrl) {
-  const url = new URL(rawUrl)
-  url.searchParams.set('cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-  return url.toString()
-}
 
 function ProductsPage() {
   const { businessSlug: routeBusinessSlug } = useParams()
@@ -29,22 +23,16 @@ function ProductsPage() {
   const selectedBusinessSlug = routeBusinessSlug || searchParams.get('business') || ''
 
   const reloadProducts = useCallback(async () => {
-    const response = await fetch(cacheBustedUrl(getProductsDataUrl()))
-    if (!response.ok) {
+    const data = await fetchPublicRepoJson('data/products.json')
+    if (!Array.isArray(data)) {
       throw new Error('Unable to fetch products list.')
     }
-    const data = await response.json()
-    setProducts(Array.isArray(data) ? data : [])
+    setProducts(data)
   }, [])
 
   const reloadBusinesses = useCallback(async () => {
     try {
-      const response = await fetch(cacheBustedUrl(getBusinessesDataUrl()))
-      if (!response.ok || response.status === 404) {
-        setBusinesses([])
-        return
-      }
-      const list = await response.json()
+      const list = await fetchPublicRepoJson('data/businesses.json')
       setBusinesses(Array.isArray(list) ? list : [])
     } catch {
       setBusinesses([])

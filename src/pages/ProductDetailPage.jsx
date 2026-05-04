@@ -4,10 +4,27 @@ import ImageWithFallback from '../components/ImageWithFallback'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import { CATALOG_CHANGED_EVENT } from '../utils/catalogEvents'
-import { getBusinessesDataUrl, getProductsDataUrl } from '../utils/github'
+import { fetchPublicRepoJson } from '../utils/github'
 import { getCurrentAdmin, isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug, getImageCacheKey, getProductImages } from '../utils/product'
 import { PRODUCT_OPTIONAL_FIELD_MAP } from '../utils/productFields'
+
+async function computeCanEditProduct(item) {
+  if (!item || !isAdminSession()) {
+    return false
+  }
+  const admin = getCurrentAdmin()
+  if (admin?.role === 'super_admin') {
+    return true
+  }
+  const list = await fetchPublicRepoJson('data/businesses.json')
+  if (!Array.isArray(list)) {
+    return false
+  }
+  const bslug = getBusinessSlug(item)
+  const biz = list.find((b) => b.slug === bslug)
+  return Boolean(biz && biz.createdBy === admin?.username)
+}
 
 function ProductDetailPage() {
   const { slug } = useParams()
@@ -21,37 +38,16 @@ function ProductDetailPage() {
       setLoading(true)
       setError('')
       try {
-        const url = new URL(getProductsDataUrl())
-        url.searchParams.set('cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-        const response = await fetch(url.toString())
-        if (!response.ok) {
+        const data = await fetchPublicRepoJson('data/products.json')
+        if (!Array.isArray(data)) {
           throw new Error('Unable to fetch product data.')
         }
-        const data = await response.json()
-        const item = Array.isArray(data) ? data.find((entry) => entry.slug === slug) : null
+        const item = data.find((entry) => entry.slug === slug)
         if (!item) {
           throw new Error('Product not found.')
         }
         setProduct(item)
-
-        let allowEdit = false
-        if (isAdminSession()) {
-          const admin = getCurrentAdmin()
-          if (admin?.role === 'super_admin') {
-            allowEdit = true
-          } else {
-            const bizUrl = new URL(getBusinessesDataUrl())
-            bizUrl.searchParams.set('cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-            const bizRes = await fetch(bizUrl.toString())
-            if (bizRes.ok) {
-              const list = await bizRes.json()
-              const bslug = getBusinessSlug(item)
-              const biz = Array.isArray(list) ? list.find((b) => b.slug === bslug) : null
-              allowEdit = Boolean(biz && biz.createdBy === admin?.username)
-            }
-          }
-        }
-        setCanEditProduct(allowEdit)
+        setCanEditProduct(await computeCanEditProduct(item))
       } catch (err) {
         setError(err.message)
       } finally {
@@ -68,37 +64,16 @@ function ProductDetailPage() {
       }
       async function silentReload() {
         try {
-          const url = new URL(getProductsDataUrl())
-          url.searchParams.set('cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-          const response = await fetch(url.toString())
-          if (!response.ok) {
+          const data = await fetchPublicRepoJson('data/products.json')
+          if (!Array.isArray(data)) {
             return
           }
-          const data = await response.json()
-          const item = Array.isArray(data) ? data.find((entry) => entry.slug === slug) : null
+          const item = data.find((entry) => entry.slug === slug)
           if (!item) {
             return
           }
           setProduct(item)
-
-          let allowEdit = false
-          if (isAdminSession()) {
-            const admin = getCurrentAdmin()
-            if (admin?.role === 'super_admin') {
-              allowEdit = true
-            } else {
-              const bizUrl = new URL(getBusinessesDataUrl())
-              bizUrl.searchParams.set('cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-              const bizRes = await fetch(bizUrl.toString())
-              if (bizRes.ok) {
-                const list = await bizRes.json()
-                const bslug = getBusinessSlug(item)
-                const biz = Array.isArray(list) ? list.find((b) => b.slug === bslug) : null
-                allowEdit = Boolean(biz && biz.createdBy === admin?.username)
-              }
-            }
-          }
-          setCanEditProduct(allowEdit)
+          setCanEditProduct(await computeCanEditProduct(item))
         } catch {
           // ignore background refresh errors
         }

@@ -659,7 +659,44 @@ export function getRawRepoUrl(filePath) {
   return `https://raw.githubusercontent.com/${owner}/${repo}/${DEFAULT_BRANCH}/${filePath}`
 }
 
-/** Plain cross-origin GET works (ACAO *); OPTIONS preflight gets HTTP 403 from raw.githubusercontent.com, so use `fetch(url)` with no init options that trigger preflight (e.g. avoid `cache: 'no-store'`). */
+/**
+ * Load a repo JSON file from the browser without hitting raw.githubusercontent.com (OPTIONS returns 403 → CORS preflight fails from github.io).
+ * Uses GET /repos/.../contents/... which answers OPTIONS correctly (204 + ACAO *).
+ */
+export async function fetchPublicRepoJsonText(repoRelativePath) {
+  const owner = import.meta.env.VITE_GITHUB_OWNER || DEFAULT_OWNER
+  const repo = import.meta.env.VITE_GITHUB_REPO || DEFAULT_REPO
+  const trimmed = String(repoRelativePath).replace(/^\/+|\/+$/g, '')
+  const encodedPath = trimmed
+    .split('/')
+    .filter(Boolean)
+    .map((seg) => encodeURIComponent(seg))
+    .join('/')
+  const url = new URL(`https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}`)
+  url.searchParams.set('ref', DEFAULT_BRANCH)
+  url.searchParams.set('_cb', `${Date.now()}`)
+  const res = await fetch(url.toString())
+  if (res.status === 404) {
+    return null
+  }
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(`Unable to load ${trimmed} (${res.status}). ${detail.slice(0, 240)}`)
+  }
+  const payload = await res.json()
+  if (payload.type !== 'file' || typeof payload.content !== 'string') {
+    throw new Error(`Unexpected GitHub contents payload for ${trimmed}.`)
+  }
+  return decodeContent(payload.content)
+}
+
+export async function fetchPublicRepoJson(repoRelativePath) {
+  const text = await fetchPublicRepoJsonText(repoRelativePath)
+  if (text == null) {
+    return null
+  }
+  return JSON.parse(text)
+}
 
 export function getProductsDataUrl() {
   return getRawRepoUrl('data/products.json')
