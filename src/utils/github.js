@@ -169,6 +169,51 @@ async function putJsonFile(path, data, message) {
   })
 }
 
+async function deleteStaleCategoryApiFiles(businessSlug, categoryNames) {
+  const expectedSlugs = new Set(categoryNames.map((name) => toCategorySlug(name)))
+  const folderPath = `public/api/${businessSlug}/category`
+  try {
+    const data = await githubRequest(`/contents/${folderPath}`)
+    if (!Array.isArray(data)) {
+      return
+    }
+    for (const item of data) {
+      if (item.type !== 'file' || !item.name.toLowerCase().endsWith('.json')) {
+        continue
+      }
+      const slug = item.name.slice(0, -'.json'.length)
+      if (!expectedSlugs.has(slug)) {
+        await deleteRepoFile({
+          path: item.path,
+          message: `Remove stale category API ${businessSlug}/${slug}`,
+        })
+      }
+    }
+  } catch {
+    // Folder missing or empty.
+  }
+}
+
+async function deleteCategoryApiFolder(businessSlug) {
+  const folderPath = `public/api/${businessSlug}/category`
+  try {
+    const data = await githubRequest(`/contents/${folderPath}`)
+    if (!Array.isArray(data)) {
+      return
+    }
+    for (const item of data) {
+      if (item.type === 'file') {
+        await deleteRepoFile({
+          path: item.path,
+          message: `Remove category API ${businessSlug}/${item.name}`,
+        })
+      }
+    }
+  } catch {
+    // Folder missing.
+  }
+}
+
 async function syncBusinessApiArtifacts(products, businesses) {
   const bundlePayload = {
     generatedAt: new Date().toISOString(),
@@ -188,6 +233,7 @@ async function syncBusinessApiArtifacts(products, businesses) {
     const categories = Array.from(
       new Set(filtered.map((product) => String(product.category || '').trim()).filter(Boolean)),
     )
+    await deleteStaleCategoryApiFiles(business.slug, categories)
     const payload = {
       generatedAt: new Date().toISOString(),
       business: {
@@ -389,6 +435,7 @@ export async function deleteBusiness(slug, actor) {
   } catch {
     // Missing file is fine.
   }
+  await deleteCategoryApiFolder(slug)
   try {
     await deleteRepoFile({
       path: `public/business/${slug}/products.json`,
