@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-05-04T09:57:47.983Z",
+  "business": {
+    "slug": "napoletana-nostra",
+    "name": "Napoletana Nostra"
+  },
+  "endpoints": {
+    "bundleUrl": "https://raw.githubusercontent.com/kresha325/Product-System/main/public/api/napoletana-nostra.json",
+    "productsUrl": "https://raw.githubusercontent.com/kresha325/Product-System/main/public/business/napoletana-nostra/products.json",
+    "businessesIndexUrl": "https://raw.githubusercontent.com/kresha325/Product-System/main/public/api/businesses.json",
+    "categories": [
+      {
+        "name": "Pije",
+        "slug": "pije",
+        "url": "https://raw.githubusercontent.com/kresha325/Product-System/main/public/api/napoletana-nostra/category/pije.json"
+      }
+    ]
+  }
+}
