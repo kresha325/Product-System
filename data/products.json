@@ -11,5 +11,18 @@
       "https://kresha325.github.io/Product-System/images/napoletana-nostra/coca-cola/1.webp"
     ],
     "updatedAt": "2026-05-04T09:57:37.983Z"
+  },
+  {
+    "name": "Filet Mignon",
+    "slug": "filet-mignon",
+    "businessSlug": "napoletananostra",
+    "businessName": "NapoletanaNostra",
+    "category": "stake",
+    "description": "Demiglas sous, perime,",
+    "details": {},
+    "images": [
+      "https://kresha325.github.io/Product-System/images/napoletananostra/filet-mignon/1.webp"
+    ],
+    "updatedAt": "2026-05-04T20:37:13.430Z"
   }
 ]
