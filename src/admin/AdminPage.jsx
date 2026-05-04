@@ -11,6 +11,7 @@ import {
   updateProductWithImages,
 } from '../utils/github'
 import { fetchUrlAsWebpBase64, fileToWebpBase64 } from '../utils/image'
+import { dispatchCatalogChanged } from '../utils/catalogEvents'
 import { getCurrentAdmin } from '../utils/adminSession'
 import { DEFAULT_BUSINESS_SLUG, getBusinessSlug, getProductImages } from '../utils/product'
 import { PRODUCT_OPTIONAL_FIELD_MAP } from '../utils/productFields'
@@ -388,6 +389,7 @@ function AdminPage() {
         message: `Import complete: ${added} new product(s) added (duplicates and other businesses skipped).`,
       })
       await loadProducts()
+      dispatchCatalogChanged()
     } catch (err) {
       setStatus({
         type: 'error',
@@ -488,6 +490,7 @@ function AdminPage() {
       setGalleryItems([])
       setStatus({ type: 'success', message: 'Product saved to GitHub successfully.' })
       await loadProducts()
+      dispatchCatalogChanged()
       if (editSlugParam) {
         navigate('/admin')
       }
@@ -508,6 +511,7 @@ function AdminPage() {
       await deleteProductBySlug(slugToDelete)
       setStatus({ type: 'success', message: 'Product deleted successfully.' })
       await loadProducts()
+      dispatchCatalogChanged()
       if (editSlugParam === slugToDelete) {
         navigate('/admin')
       }

@@ -1,11 +1,26 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import ProductCard from '../components/ProductCard'
+import { CATALOG_CHANGED_EVENT, dispatchCatalogChanged } from '../utils/catalogEvents'
 import { deleteProductBySlug, getBusinessesDataUrl, getProductsDataUrl } from '../utils/github'
 import { getCurrentAdmin, isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug } from '../utils/product'
+
+const FETCH_OPTS = {
+  cache: 'no-store',
+  headers: {
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+  },
+}
+
+function cacheBustedUrl(rawUrl) {
+  const url = new URL(rawUrl)
+  url.searchParams.set('cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  return url.toString()
+}
 
 function ProductsPage() {
   const { businessSlug: routeBusinessSlug } = useParams()
@@ -21,50 +36,65 @@ function ProductsPage() {
   const isAdmin = isAdminSession()
   const selectedBusinessSlug = routeBusinessSlug || searchParams.get('business') || ''
 
-  async function reloadProductsFromRepo() {
-    const url = new URL(getProductsDataUrl())
-    url.searchParams.set('t', Date.now().toString())
-    const response = await fetch(url.toString(), { cache: 'no-store' })
+  const reloadProducts = useCallback(async () => {
+    const response = await fetch(cacheBustedUrl(getProductsDataUrl()), FETCH_OPTS)
     if (!response.ok) {
       throw new Error('Unable to fetch products list.')
     }
     const data = await response.json()
     setProducts(Array.isArray(data) ? data : [])
-  }
+  }, [])
+
+  const reloadBusinesses = useCallback(async () => {
+    try {
+      const response = await fetch(cacheBustedUrl(getBusinessesDataUrl()), FETCH_OPTS)
+      if (!response.ok || response.status === 404) {
+        setBusinesses([])
+        return
+      }
+      const list = await response.json()
+      setBusinesses(Array.isArray(list) ? list : [])
+    } catch {
+      setBusinesses([])
+    }
+  }, [])
 
   useEffect(() => {
-    async function loadProducts() {
+    let cancelled = false
+
+    async function initialLoad() {
       setLoading(true)
       setError('')
       try {
-        await reloadProductsFromRepo()
+        await reloadProducts()
+        await reloadBusinesses()
       } catch (err) {
-        setError(err.message)
+        if (!cancelled) {
+          setError(err.message)
+        }
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     }
-    loadProducts()
-  }, [])
+
+    initialLoad()
+
+    return () => {
+      cancelled = true
+    }
+  }, [reloadProducts, reloadBusinesses])
 
   useEffect(() => {
-    async function loadBusinesses() {
-      try {
-        const url = new URL(getBusinessesDataUrl())
-        url.searchParams.set('t', Date.now().toString())
-        const response = await fetch(url.toString(), { cache: 'no-store' })
-        if (!response.ok || response.status === 404) {
-          setBusinesses([])
-          return
-        }
-        const list = await response.json()
-        setBusinesses(Array.isArray(list) ? list : [])
-      } catch {
-        setBusinesses([])
-      }
+    function onCatalogChanged() {
+      reloadProducts().catch(() => {})
+      reloadBusinesses().catch(() => {})
     }
-    loadBusinesses()
-  }, [])
+
+    window.addEventListener(CATALOG_CHANGED_EVENT, onCatalogChanged)
+    return () => window.removeEventListener(CATALOG_CHANGED_EVENT, onCatalogChanged)
+  }, [reloadProducts, reloadBusinesses])
 
   const visibleBusinesses = useMemo(() => {
     if (!isAdmin || !currentAdmin || currentAdmin.role === 'super_admin') {
@@ -129,7 +159,8 @@ function ProductsPage() {
     try {
       await deleteProductBySlug(slug)
       setAdminNotice({ type: 'success', message: 'Product deleted.' })
-      await reloadProductsFromRepo()
+      await reloadProducts()
+      dispatchCatalogChanged()
     } catch (err) {
       setAdminNotice({
         type: 'error',

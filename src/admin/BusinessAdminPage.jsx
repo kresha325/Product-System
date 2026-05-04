@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import { deleteBusiness, listBusinessesFromRepo, saveBusiness, updateBusiness } from '../utils/github'
+import { dispatchCatalogChanged } from '../utils/catalogEvents'
 import { getCurrentAdmin } from '../utils/adminSession'
 import { PRODUCT_OPTIONAL_FIELDS } from '../utils/productFields'
 import { toSlug } from '../utils/slug'
@@ -122,6 +123,7 @@ function BusinessAdminPage() {
       setEditingSlug('')
       setStatus({ type: 'success', message: editingSlug ? 'Business updated.' : 'Business saved to GitHub.' })
       await refreshBusinesses()
+      dispatchCatalogChanged()
     } catch (err) {
       setStatus({ type: 'error', message: err.message || 'Failed to save business.' })
     } finally {
@@ -140,6 +142,7 @@ function BusinessAdminPage() {
       await deleteBusiness(slug, currentAdmin)
       setStatus({ type: 'success', message: 'Business deleted.' })
       await refreshBusinesses()
+      dispatchCatalogChanged()
     } catch (err) {
       setStatus({ type: 'error', message: err.message || 'Failed to delete.' })
     } finally {
