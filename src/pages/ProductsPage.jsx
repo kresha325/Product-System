@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Notification from '../components/Notification'
 import ProductCard from '../components/ProductCard'
-import { getBusinessesDataUrl, getProductsDataUrl } from '../utils/github'
+import { deleteProductBySlug, getBusinessesDataUrl, getProductsDataUrl } from '../utils/github'
 import { getCurrentAdmin, isAdminSession } from '../utils/adminSession'
 import { getBusinessSlug } from '../utils/product'
 
@@ -15,23 +15,29 @@ function ProductsPage() {
   const [businesses, setBusinesses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [deletingSlug, setDeletingSlug] = useState('')
+  const [adminNotice, setAdminNotice] = useState({ type: 'info', message: '' })
   const currentAdmin = useMemo(() => getCurrentAdmin(), [])
   const isAdmin = isAdminSession()
   const selectedBusinessSlug = routeBusinessSlug || searchParams.get('business') || ''
+
+  async function reloadProductsFromRepo() {
+    const url = new URL(getProductsDataUrl())
+    url.searchParams.set('t', Date.now().toString())
+    const response = await fetch(url.toString(), { cache: 'no-store' })
+    if (!response.ok) {
+      throw new Error('Unable to fetch products list.')
+    }
+    const data = await response.json()
+    setProducts(Array.isArray(data) ? data : [])
+  }
 
   useEffect(() => {
     async function loadProducts() {
       setLoading(true)
       setError('')
       try {
-        const url = new URL(getProductsDataUrl())
-        url.searchParams.set('t', Date.now().toString())
-        const response = await fetch(url.toString(), { cache: 'no-store' })
-        if (!response.ok) {
-          throw new Error('Unable to fetch products list.')
-        }
-        const data = await response.json()
-        setProducts(Array.isArray(data) ? data : [])
+        await reloadProductsFromRepo()
       } catch (err) {
         setError(err.message)
       } finally {
@@ -101,6 +107,39 @@ function ProductsPage() {
     navigate(`/products?business=${encodeURIComponent(nextSlug)}`)
   }
 
+  function canManageProduct(product) {
+    if (!isAdmin || !currentAdmin) {
+      return false
+    }
+    if (currentAdmin.role === 'super_admin') {
+      return true
+    }
+    return visibleBusinesses.some(
+      (business) =>
+        business.slug === getBusinessSlug(product) && business.createdBy === currentAdmin.username,
+    )
+  }
+
+  async function handleDeleteProduct(slug) {
+    if (!slug || !window.confirm('Delete this product? This removes data and gallery images from the repository.')) {
+      return
+    }
+    setAdminNotice({ type: 'info', message: '' })
+    setDeletingSlug(slug)
+    try {
+      await deleteProductBySlug(slug)
+      setAdminNotice({ type: 'success', message: 'Product deleted.' })
+      await reloadProductsFromRepo()
+    } catch (err) {
+      setAdminNotice({
+        type: 'error',
+        message: err.message || 'Failed to delete product.',
+      })
+    } finally {
+      setDeletingSlug('')
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div className="space-y-3">
@@ -137,22 +176,18 @@ function ProductsPage() {
 
       {loading && <LoadingSpinner label="Loading products..." />}
       {!loading && error && <Notification type="error" message={error} />}
+      {!loading && adminNotice.message ? (
+        <Notification type={adminNotice.type} message={adminNotice.message} />
+      ) : null}
       {!loading && !error && filteredProducts.length > 0 ? (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {filteredProducts.map((product) => (
             <ProductCard
               key={product.slug}
               product={product}
-              showAdminEdit={
-                isAdmin &&
-                (!!currentAdmin &&
-                  (currentAdmin.role === 'super_admin' ||
-                    visibleBusinesses.some(
-                      (business) =>
-                        business.slug === getBusinessSlug(product) &&
-                        business.createdBy === currentAdmin.username,
-                    )))
-              }
+              showAdminEdit={canManageProduct(product)}
+              onDeleteProduct={canManageProduct(product) ? handleDeleteProduct : undefined}
+              deletingSlug={deletingSlug}
             />
           ))}
         </div>
